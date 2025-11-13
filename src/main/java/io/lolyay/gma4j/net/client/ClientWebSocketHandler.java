@@ -2,31 +2,33 @@ package io.lolyay.gma4j.net.client;
 
 import io.lolyay.gma4j.net.Packet;
 import io.lolyay.gma4j.net.PacketCodec;
-import org.eclipse.jetty.websocket.api.Session;
-import org.eclipse.jetty.websocket.api.annotations.*;
+import org.java_websocket.client.WebSocketClient;
+import org.java_websocket.handshake.ServerHandshake;
+
+import java.net.URI;
 
 /**
- * Jetty WebSocket client endpoint.
+ * Java-WebSocket client endpoint that bridges events to PacketHandler callbacks.
  */
-@WebSocket
-public class ClientWebSocketHandler {
+public class ClientWebSocketHandler extends WebSocketClient {
     private final ClientPacketSocket packetSocket;
     private final PacketHandler packetHandler;
 
-    public ClientWebSocketHandler(ClientPacketSocket packetSocket, PacketHandler packetHandler) {
+    public ClientWebSocketHandler(URI serverUri, ClientPacketSocket packetSocket, PacketHandler packetHandler) {
+        super(serverUri);
         this.packetSocket = packetSocket;
         this.packetHandler = packetHandler;
     }
 
-    @OnWebSocketConnect
-    public void onConnect(Session session) {
-        System.out.println("Connected to server: " + session.getRemoteAddress());
-        packetSocket.setSession(session);
+    @Override
+    public void onOpen(ServerHandshake handshakedata) {
+        System.out.println("Connected to server: " + getURI());
+        packetSocket.setConnection(this);
         packetHandler.onConnect(packetSocket);
     }
 
-    @OnWebSocketMessage
-    public void onMessage(Session session, String message) {
+    @Override
+    public void onMessage(String message) {
         try {
             Packet packet = PacketCodec.decode(message);
             packetHandler.onPacket(packetSocket, packet);
@@ -36,16 +38,17 @@ public class ClientWebSocketHandler {
         }
     }
 
-    @OnWebSocketClose
-    public void onClose(Session session, int statusCode, String reason) {
-        System.out.println("Disconnected from server (" + statusCode + "): " + reason);
+    @Override
+    public void onClose(int code, String reason, boolean remote) {
+        System.out.println("Disconnected from server (" + code + "): " + reason);
         packetHandler.onDisconnect(packetSocket);
+        packetSocket.clearConnection();
     }
 
-    @OnWebSocketError
-    public void onError(Session session, Throwable error) {
-        System.err.println("WebSocket error: " + error.getMessage());
-        error.printStackTrace();
+    @Override
+    public void onError(Exception ex) {
+        System.err.println("WebSocket error: " + ex.getMessage());
+        ex.printStackTrace();
     }
 
     /**

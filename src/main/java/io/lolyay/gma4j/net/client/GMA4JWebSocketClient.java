@@ -1,7 +1,6 @@
 package io.lolyay.gma4j.net.client;
 
 import io.lolyay.gma4j.net.Packet;
-import io.lolyay.gma4j.packets.system.PacketPing;
 import io.lolyay.gma4j.packets.system.PacketPong;
 import io.lolyay.gma4j.packets.system.PacketVersion;
 
@@ -13,25 +12,24 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * Enhanced WebSocket client with auto-reconnect, ping/pong, and advanced features.
  */
-public class EnhancedWebSocketClient {
-    private final org.eclipse.jetty.websocket.client.WebSocketClient jettyClient;
-    private final ClientSettings settings;
+public class GMA4JWebSocketClient {
+    private final GMA4JClientSettings settings;
     private final EnhancedPacketHandler userHandler;
     private final ClientPacketSocket packetSocket;
     private final LatencyMonitor latencyMonitor;
     private final ScheduledExecutorService scheduler;
     
     private String currentUri;
+    private EnhancedWebSocketHandler currentHandler;
     private AtomicBoolean isConnected = new AtomicBoolean(false);
     private AtomicBoolean shouldReconnect = new AtomicBoolean(false);
     private AtomicInteger reconnectAttempts = new AtomicInteger(0);
     private ScheduledFuture<?> pingTask;
     private ScheduledFuture<?> reconnectTask;
 
-    public EnhancedWebSocketClient(ClientSettings settings, EnhancedPacketHandler userHandler) {
+    public GMA4JWebSocketClient(GMA4JClientSettings settings, EnhancedPacketHandler userHandler) {
         this.settings = settings;
         this.userHandler = userHandler;
-        this.jettyClient = new org.eclipse.jetty.websocket.client.WebSocketClient();
         this.packetSocket = new ClientPacketSocket();
         this.latencyMonitor = new LatencyMonitor(packetSocket);
         this.scheduler = Executors.newScheduledThreadPool(2, r -> {
@@ -50,31 +48,46 @@ public class EnhancedWebSocketClient {
     public void connect(String uri) throws Exception {
         this.currentUri = uri;
         shouldReconnect.set(settings.isAutoReconnect());
-        
-        if (!jettyClient.isStarted()) {
-            jettyClient.start();
-        }
 
         doConnect();
     }
 
     private void doConnect() throws Exception {
         System.out.println("[Client] Connecting to: " + currentUri);
-        
+
         EnhancedWebSocketHandler handler = new EnhancedWebSocketHandler(
-            packetSocket, 
+            new URI(currentUri),
+            packetSocket,
             settings,
             latencyMonitor,
             new InternalPacketHandler()
         );
 
-        CompletableFuture<org.eclipse.jetty.websocket.api.Session> future = 
-            jettyClient.connect(handler, new URI(currentUri));
-        
+        currentHandler = handler;
+
         try {
-            future.get(settings.getConnectionTimeout().toMillis(), TimeUnit.MILLISECONDS);
-        } catch (TimeoutException e) {
-            throw new TimeoutException("Connection timeout after " + settings.getConnectionTimeout());
+            boolean connected = handler.connectBlocking(
+                settings.getConnectionTimeout().toMillis(),
+                TimeUnit.MILLISECONDS
+            );
+
+            if (!connected) {
+                handler.close();
+                currentHandler = null;
+                packetSocket.clearConnection();
+                throw new TimeoutException("Connection timeout after " + settings.getConnectionTimeout());
+            }
+        } catch (InterruptedException e) {
+            handler.close();
+            currentHandler = null;
+            packetSocket.clearConnection();
+            Thread.currentThread().interrupt();
+            throw e;
+        } catch (RuntimeException e) {
+            handler.close();
+            currentHandler = null;
+            packetSocket.clearConnection();
+            throw e;
         }
     }
 
@@ -86,10 +99,12 @@ public class EnhancedWebSocketClient {
         stopPingTask();
         stopReconnectTask();
         
-        if (packetSocket.getSession() != null) {
-            packetSocket.getSession().close();
+        if (currentHandler != null) {
+            currentHandler.close();
+            currentHandler = null;
         }
-        
+
+        packetSocket.clearConnection();
         isConnected.set(false);
     }
 
@@ -99,7 +114,6 @@ public class EnhancedWebSocketClient {
     public void stop() throws Exception {
         disconnect();
         scheduler.shutdown();
-        jettyClient.stop();
     }
 
     private void startPingTask() {
@@ -167,7 +181,7 @@ public class EnhancedWebSocketClient {
         return latencyMonitor;
     }
 
-    public ClientSettings getSettings() {
+    public GMA4JClientSettings getSettings() {
         return settings;
     }
 
@@ -252,7 +266,7 @@ public class EnhancedWebSocketClient {
         /**
          * Called when all reconnect attempts have failed.
          */
-        default void onReconnectFailed(EnhancedWebSocketClient client) {
+        default void onReconnectFailed(GMA4JWebSocketClient client) {
             System.err.println("[Client] All reconnection attempts failed");
         }
     }

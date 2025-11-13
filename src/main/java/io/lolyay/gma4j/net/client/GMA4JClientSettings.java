@@ -23,7 +23,7 @@ import java.time.Duration;
  * @since 1.0.0
  * @version 1.1.0
  */
-public class ClientSettings {
+public class GMA4JClientSettings {
     private final boolean autoReconnect;
     private final int maxReconnectAttempts;
     private final Duration reconnectDelay;
@@ -37,7 +37,7 @@ public class ClientSettings {
     private final String clientIdentifier;
     private final String identificationMetadata;
 
-    private ClientSettings(Builder builder) {
+    private GMA4JClientSettings(Builder builder) {
         this.autoReconnect = builder.autoReconnect;
         this.maxReconnectAttempts = builder.maxReconnectAttempts;
         this.reconnectDelay = builder.reconnectDelay;
@@ -303,8 +303,8 @@ public class ClientSettings {
             return this;
         }
 
-        public ClientSettings build() {
-            return new ClientSettings(this);
+        public GMA4JClientSettings build() {
+            return new GMA4JClientSettings(this);
         }
     }
 

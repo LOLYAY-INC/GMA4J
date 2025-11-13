@@ -4,12 +4,11 @@ import io.lolyay.gma4j.net.Packet;
 import io.lolyay.gma4j.net.crypto.CryptoUtils;
 import io.lolyay.gma4j.net.crypto.SecurePacketCodec;
 import io.lolyay.gma4j.packets.auth.*;
-import org.eclipse.jetty.websocket.api.Session;
-import org.eclipse.jetty.websocket.api.annotations.*;
+import org.java_websocket.client.WebSocketClient;
+import org.java_websocket.handshake.ServerHandshake;
 
 import javax.crypto.SecretKey;
 import java.security.KeyPair;
-import java.security.PrivateKey;
 
 /**
  * Secure WebSocket client with authentication and encryption.
@@ -41,20 +40,19 @@ import java.security.PrivateKey;
  * </pre>
  * </p>
  * 
- * @see ClientSettings
+ * @see GMA4JClientSettings
  * @see SecurePacketHandler
  * @since 1.0.0
  * @version 1.1.0
  */
-public class SecureWebSocketClient {
-    private final org.eclipse.jetty.websocket.client.WebSocketClient jettyClient;
+public class GMA4JImplWebSocketClient {
     private final String apiKey;
     private final SecurePacketHandler userHandler;
-    private final ClientSettings settings;
+    private final GMA4JClientSettings settings;
     
     private KeyPair keyPair;
     private SecretKey sharedSecret;
-    private Session session;
+    private SecureWebSocketHandler currentHandler;
     private volatile boolean authenticated = false;
 
     /**
@@ -63,8 +61,8 @@ public class SecureWebSocketClient {
      * @param apiKey the API key for HMAC authentication
      * @param userHandler the handler for packet events
      */
-    public SecureWebSocketClient(String apiKey, SecurePacketHandler userHandler) {
-        this(apiKey, userHandler, ClientSettings.builder().build());
+    public GMA4JImplWebSocketClient(String apiKey, SecurePacketHandler userHandler) {
+        this(apiKey, userHandler, GMA4JClientSettings.builder().build());
     }
 
     /**
@@ -79,11 +77,10 @@ public class SecureWebSocketClient {
      * @param settings the client configuration settings
      * @since 1.1.0
      */
-    public SecureWebSocketClient(String apiKey, SecurePacketHandler userHandler, ClientSettings settings) {
+    public GMA4JImplWebSocketClient(String apiKey, SecurePacketHandler userHandler, GMA4JClientSettings settings) {
         this.apiKey = apiKey;
         this.userHandler = userHandler;
         this.settings = settings;
-        this.jettyClient = new org.eclipse.jetty.websocket.client.WebSocketClient();
     }
 
     /**
@@ -99,14 +96,29 @@ public class SecureWebSocketClient {
     public void connect(String uri) throws Exception {
         // Generate key pair for authentication
         keyPair = CryptoUtils.generateKeyPair();
-        
-        if (!jettyClient.isStarted()) {
-            jettyClient.start();
-        }
 
         System.out.println("[SecureClient] Connecting to: " + uri);
-        jettyClient.connect(new SecureWebSocketHandler(), new java.net.URI(uri))
-                .get(10, java.util.concurrent.TimeUnit.SECONDS);
+
+        SecureWebSocketHandler handler = new SecureWebSocketHandler(new java.net.URI(uri));
+        currentHandler = handler;
+
+        try {
+            boolean connected = handler.connectBlocking(10, java.util.concurrent.TimeUnit.SECONDS);
+            if (!connected) {
+                handler.close();
+                currentHandler = null;
+                throw new java.util.concurrent.TimeoutException("Connection timeout after 10 seconds");
+            }
+        } catch (InterruptedException e) {
+            handler.close();
+            currentHandler = null;
+            Thread.currentThread().interrupt();
+            throw e;
+        } catch (RuntimeException e) {
+            handler.close();
+            currentHandler = null;
+            throw e;
+        }
     }
 
     /**
@@ -124,13 +136,13 @@ public class SecureWebSocketClient {
         if (!authenticated) {
             throw new IllegalStateException("Not authenticated");
         }
-        if (session == null || !session.isOpen()) {
+        if (currentHandler == null || !currentHandler.isOpen()) {
             throw new IllegalStateException("Not connected");
         }
 
         try {
             String json = SecurePacketCodec.encode(packet, sharedSecret);
-            session.getRemote().sendString(json);
+            currentHandler.send(json);
         } catch (Exception e) {
             throw new RuntimeException("Failed to send encrypted packet", e);
         }
@@ -149,7 +161,11 @@ public class SecureWebSocketClient {
     private void sendPacketUnencrypted(Packet packet) {
         try {
             String json = SecurePacketCodec.encode(packet, null);
-            session.getRemote().sendString(json);
+            if (currentHandler != null) {
+                currentHandler.send(json);
+            } else {
+                throw new IllegalStateException("Not connected");
+            }
         } catch (Exception e) {
             throw new RuntimeException("Failed to send packet", e);
         }
@@ -170,37 +186,39 @@ public class SecureWebSocketClient {
      * @return true if connected
      */
     public boolean isConnected() {
-        return session != null && session.isOpen();
+        return currentHandler != null && currentHandler.isOpen();
     }
 
     /**
      * Disconnects from the server by closing the WebSocket session.
      */
     public void disconnect() {
-        if (session != null) {
-            session.close();
+        if (currentHandler != null) {
+            currentHandler.close();
+            currentHandler = null;
         }
     }
 
     /**
-     * Stops the client completely, closing connections and shutting down the Jetty client.
+     * Stops the client completely, closing connections and shutting down the WebSocket session.
      * 
      * @throws Exception if shutdown fails
      */
     public void stop() throws Exception {
         disconnect();
-        jettyClient.stop();
     }
 
     /**
      * Internal WebSocket handler that manages the secure connection lifecycle.
      */
-    @WebSocket
-    private class SecureWebSocketHandler {
+    private class SecureWebSocketHandler extends WebSocketClient {
 
-        @OnWebSocketConnect
-        public void onConnect(Session sess) {
-            session = sess;
+        SecureWebSocketHandler(java.net.URI serverUri) {
+            super(serverUri);
+        }
+
+        @Override
+        public void onOpen(ServerHandshake handshakedata) {
             System.out.println("[SecureClient] Connected, starting authentication...");
             
             try {
@@ -214,8 +232,8 @@ public class SecureWebSocketClient {
             }
         }
 
-        @OnWebSocketMessage
-        public void onMessage(Session sess, String message) {
+        @Override
+        public void onMessage(String message) {
             try {
                 // Decode with current encryption state
                 Packet packet = SecurePacketCodec.decode(message, sharedSecret);
@@ -237,7 +255,7 @@ public class SecureWebSocketClient {
                 
                 // Handle user packets (only if authenticated)
                 if (authenticated) {
-                    userHandler.onPacket(SecureWebSocketClient.this, packet);
+                    userHandler.onPacket(GMA4JImplWebSocketClient.this, packet);
                 } else {
                     System.err.println("[SecureClient] Received packet before authentication: " + packet);
                 }
@@ -289,25 +307,25 @@ public class SecureWebSocketClient {
                 }
             }
             
-            userHandler.onAuthenticated(SecureWebSocketClient.this);
+            userHandler.onAuthenticated(GMA4JImplWebSocketClient.this);
         }
 
         private void handleAuthFailed(PacketAuthFailed packet) {
             System.err.println("[SecureClient] ✗ Authentication failed: " + packet.getReason());
-            session.close();
+            close();
         }
 
-        @OnWebSocketClose
-        public void onClose(Session sess, int statusCode, String reason) {
-            System.out.println("[SecureClient] Disconnected (" + statusCode + "): " + reason);
+        @Override
+        public void onClose(int code, String reason, boolean remote) {
+            System.out.println("[SecureClient] Disconnected (" + code + "): " + reason);
             authenticated = false;
-            userHandler.onDisconnect(SecureWebSocketClient.this);
+            userHandler.onDisconnect(GMA4JImplWebSocketClient.this);
         }
 
-        @OnWebSocketError
-        public void onError(Session sess, Throwable error) {
-            System.err.println("[SecureClient] Error: " + error.getMessage());
-            error.printStackTrace();
+        @Override
+        public void onError(Exception ex) {
+            System.err.println("[SecureClient] Error: " + ex.getMessage());
+            ex.printStackTrace();
         }
     }
 
@@ -322,16 +340,16 @@ public class SecureWebSocketClient {
         /**
          * Called when authentication completes successfully.
          */
-        void onAuthenticated(SecureWebSocketClient client);
+        void onAuthenticated(GMA4JImplWebSocketClient client);
         
         /**
          * Called when an encrypted packet is received.
          */
-        void onPacket(SecureWebSocketClient client, Packet packet);
+        void onPacket(GMA4JImplWebSocketClient client, Packet packet);
         
         /**
          * Called on disconnect.
          */
-        void onDisconnect(SecureWebSocketClient client);
+        void onDisconnect(GMA4JImplWebSocketClient client);
     }
 }

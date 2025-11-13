@@ -1,7 +1,7 @@
 # GMA4J - Secure WebSocket Library
 
-[![Maven](https://img.shields.io/badge/maven-v1.1.2-blue)](https://maven.lolyay.dev/releases)
-[![Java](https://img.shields.io/badge/java-24-orange)](https://openjdk.org/)
+[![Maven](https://img.shields.io/badge/maven-v1.2.0-blue)](https://maven.lolyay.dev/releases)
+[![Java](https://img.shields.io/badge/java-17-orange)](https://openjdk.org/)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 **GMA4J** (Generic Messaging Architecture for Java) is a production-ready WebSocket library with built-in security, client identification, and type-safe messaging.
@@ -30,7 +30,7 @@
     <dependency>
         <groupId>io.lolyay.gma4j</groupId>
         <artifactId>GMA4J</artifactId>
-        <version>1.1.2</version>
+        <version>1.2.0</version>
     </dependency>
 </dependencies>
 ```
@@ -42,7 +42,7 @@ repositories {
 }
 
 dependencies {
-    implementation 'io.lolyay.gma4j:GMA4J:1.1.2'
+    implementation 'io.lolyay.gma4j:GMA4J:1.2.0'
 }
 ```
 
@@ -140,44 +140,44 @@ public class GameClient {
         PacketRegistry.register(PacketAuthFailed.class);
         PacketRegistry.register(PacketIdentification.class);
         PacketRegistry.register(PacketGameUpdate.class);
-        
+
         // 2. Create settings with automatic identification
-        ClientSettings settings = ClientSettings.builder()
-            .setClientIdentifier("smp")  // Automatically sent after auth
-            .setIdentificationMetadata("version:1.20.1,players:42")
-            .build();
-        
+        GMA4JClientSettings settings = GMA4JClientSettings.builder()
+                .setClientIdentifier("smp")  // Automatically sent after auth
+                .setIdentificationMetadata("version:1.20.1,players:42")
+                .build();
+
         // 3. Create client with handler
-        SecureWebSocketClient client = new SecureWebSocketClient(
-            "your-api-key",
-            new SecureWebSocketClient.SecurePacketHandler() {
-                @Override
-                public void onAuthenticated(SecureWebSocketClient client) {
-                    System.out.println("✓ Authenticated and identified!");
-                    
-                    // Send game updates
-                    client.sendPacket(new PacketGameUpdate("player_join", "Steve"));
-                }
-                
-                @Override
-                public void onPacket(SecureWebSocketClient client, Packet packet) {
-                    if (packet instanceof PacketGameUpdate) {
-                        PacketGameUpdate update = (PacketGameUpdate) packet;
-                        System.out.println("Received: " + update.getAction());
+        GMA4JImplWebSocketClient client = new GMA4JImplWebSocketClient(
+                "your-api-key",
+                new GMA4JImplWebSocketClient.SecurePacketHandler() {
+                    @Override
+                    public void onAuthenticated(GMA4JImplWebSocketClient client) {
+                        System.out.println("✓ Authenticated and identified!");
+
+                        // Send game updates
+                        client.sendPacket(new PacketGameUpdate("player_join", "Steve"));
                     }
-                }
-                
-                @Override
-                public void onDisconnect(SecureWebSocketClient client) {
-                    System.out.println("✗ Disconnected from server");
-                }
-            },
-            settings
+
+                    @Override
+                    public void onPacket(GMA4JImplWebSocketClient client, Packet packet) {
+                        if (packet instanceof PacketGameUpdate) {
+                            PacketGameUpdate update = (PacketGameUpdate) packet;
+                            System.out.println("Received: " + update.getAction());
+                        }
+                    }
+
+                    @Override
+                    public void onDisconnect(GMA4JImplWebSocketClient client) {
+                        System.out.println("✗ Disconnected from server");
+                    }
+                },
+                settings
         );
-        
+
         // 4. Connect
         client.connect("ws://localhost:8080/ws/game");
-        
+
         // Keep alive
         Thread.sleep(Long.MAX_VALUE);
     }
@@ -204,14 +204,14 @@ Set<String> identifiers = authManager.getAllClientIdentifiers();
 authManager.broadcast(new PacketGameUpdate("announcement", "Server maintenance tonight"));
 ```
 
-### Client: Automatic Identification (v1.1.2+)
+### Client: Automatic Identification (v1.2.0+)
 ```java
-ClientSettings settings = ClientSettings.builder()
+GMA4JClientSettings settings = GMA4JClientSettings.builder()
     .setClientIdentifier("smp")  // Your unique ID
     .setIdentificationMetadata("version:1.20.1,type:survival")
     .build();
 
-SecureWebSocketClient client = new SecureWebSocketClient(apiKey, handler, settings);
+GMA4JImplWebSocketClient client = new GMA4JImplWebSocketClient(apiKey, handler, settings);
 // Identification is sent automatically after authentication!
 ```
 
@@ -285,8 +285,9 @@ GMA4J/
 │   │   │   ├── AuthenticationManager.java   # Client management
 │   │   │   └── AuthenticatedClient.java     # Client wrapper
 │   │   └── client/
-│   │       ├── SecureWebSocketClient.java   # Client implementation
-│   │       └── ClientSettings.java          # Client configuration
+│   │       ├── GMA4JImplWebSocketClient.java # Secure client implementation
+│   │       ├── GMA4JWebSocketClient.java     # Enhanced client (version/ping, etc.)
+│   │       └── GMA4JClientSettings.java      # Client configuration
 │   └── packets/
 │       └── auth/                            # Authentication packets
 └── docs/
@@ -299,7 +300,7 @@ GMA4J/
 
 ### Client Settings
 ```java
-ClientSettings settings = ClientSettings.builder()
+GMA4JClientSettings settings = GMA4JClientSettings.builder()
     .setClientIdentifier("game-server-1")
     .setIdentificationMetadata("version:1.0.0")
     .setAutoReconnect(true)
@@ -318,8 +319,11 @@ AuthenticatedClient client = authManager.getClientById("smp");
 String metadata = client.getMetadata();
 // Parse: "version:1.20.1,players:42,maxPlayers:100"
 
-// Client side
-settings.setIdentificationMetadata("region:us-east,type:pvp");
+// Client side: configure identification metadata via settings builder
+GMA4JClientSettings settingsWithMetadata = GMA4JClientSettings.builder()
+    .setClientIdentifier("smp")
+    .setIdentificationMetadata("region:us-east,type:pvp")
+    .build();
 ```
 
 ## 🛡️ Security Features
@@ -363,7 +367,7 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 ## 🔗 Links
 
 - **Maven Repository**: https://maven.lolyay.dev/releases
-- **Coordinates**: `io.lolyay.gma4j:GMA4J:1.1.2`
+- **Coordinates**: `io.lolyay.gma4j:GMA4J:1.2.0`
 - **Jetty Documentation**: https://eclipse.dev/jetty/documentation/
 
 ---

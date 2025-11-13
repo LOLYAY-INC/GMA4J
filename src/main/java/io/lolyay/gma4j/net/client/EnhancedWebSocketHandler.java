@@ -2,45 +2,45 @@ package io.lolyay.gma4j.net.client;
 
 import io.lolyay.gma4j.net.Packet;
 import io.lolyay.gma4j.net.PacketCodecV2;
-import org.eclipse.jetty.websocket.api.Session;
-import org.eclipse.jetty.websocket.api.annotations.*;
+import org.java_websocket.client.WebSocketClient;
+import org.java_websocket.handshake.ServerHandshake;
 
-import java.time.Duration;
+import java.net.URI;
 
 /**
- * Enhanced Jetty WebSocket client endpoint with compression support.
+ * Enhanced Java-WebSocket client endpoint with compression support.
  */
-@WebSocket
-public class EnhancedWebSocketHandler {
+public class EnhancedWebSocketHandler extends WebSocketClient {
     private final ClientPacketSocket packetSocket;
-    private final ClientSettings settings;
+    private final GMA4JClientSettings settings;
     private final LatencyMonitor latencyMonitor;
     private final ClientWebSocketHandler.PacketHandler packetHandler;
 
     public EnhancedWebSocketHandler(
+            URI serverUri,
             ClientPacketSocket packetSocket,
-            ClientSettings settings,
+            GMA4JClientSettings settings,
             LatencyMonitor latencyMonitor,
             ClientWebSocketHandler.PacketHandler packetHandler) {
+        super(serverUri);
         this.packetSocket = packetSocket;
         this.settings = settings;
         this.latencyMonitor = latencyMonitor;
         this.packetHandler = packetHandler;
+
+        long idleTimeoutSeconds = Math.max(1, settings.getConnectionTimeout().multipliedBy(2).getSeconds());
+        setConnectionLostTimeout((int) idleTimeoutSeconds);
     }
 
-    @OnWebSocketConnect
-    public void onConnect(Session session) {
-        System.out.println("[Client] WebSocket connected: " + session.getRemoteAddress());
-        
-        // Configure session timeouts
-        session.setIdleTimeout(Duration.ofMillis(settings.getConnectionTimeout().toMillis() * 2));
-        
-        packetSocket.setSession(session);
+    @Override
+    public void onOpen(ServerHandshake handshakedata) {
+        System.out.println("[Client] WebSocket connected: " + getURI());
+        packetSocket.setConnection(this);
         packetHandler.onConnect(packetSocket);
     }
 
-    @OnWebSocketMessage
-    public void onMessage(Session session, String message) {
+    @Override
+    public void onMessage(String message) {
         try {
             Packet packet = PacketCodecV2.decode(message);
             packetHandler.onPacket(packetSocket, packet);
@@ -50,15 +50,16 @@ public class EnhancedWebSocketHandler {
         }
     }
 
-    @OnWebSocketClose
-    public void onClose(Session session, int statusCode, String reason) {
-        System.out.println("[Client] WebSocket closed (" + statusCode + "): " + reason);
+    @Override
+    public void onClose(int code, String reason, boolean remote) {
+        System.out.println("[Client] WebSocket closed (" + code + "): " + reason);
         packetHandler.onDisconnect(packetSocket);
+        packetSocket.clearConnection();
     }
 
-    @OnWebSocketError
-    public void onError(Session session, Throwable error) {
-        System.err.println("[Client] WebSocket error: " + error.getMessage());
-        error.printStackTrace();
+    @Override
+    public void onError(Exception ex) {
+        System.err.println("[Client] WebSocket error: " + ex.getMessage());
+        ex.printStackTrace();
     }
 }

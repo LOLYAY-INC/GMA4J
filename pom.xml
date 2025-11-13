@@ -6,7 +6,7 @@
 
     <groupId>io.lolyay.gma4j</groupId>
     <artifactId>GMA4J</artifactId>
-    <version>1.1.2</version>
+    <version>1.2.0</version>
 
     <name>GMA4J</name>
     <description>Secure WebSocket library with AES-256 encryption and HMAC authentication</description>
@@ -38,19 +38,18 @@
             <artifactId>jetty-servlet</artifactId>
             <version>${jetty.version}</version>
         </dependency>
+        <dependency>
+            <groupId>org.java-websocket</groupId>
+            <artifactId>Java-WebSocket</artifactId>
+            <version>1.6.0</version>
+        </dependency>
 
-        <!-- Jetty WebSocket: Server and Client -->
+        <!-- Jetty WebSocket: Server  -->
         <dependency>
             <groupId>org.eclipse.jetty.websocket</groupId>
             <artifactId>websocket-jetty-server</artifactId>
             <version>${jetty.version}</version>
         </dependency>
-        <dependency>
-            <groupId>org.eclipse.jetty.websocket</groupId>
-            <artifactId>websocket-jetty-client</artifactId>
-            <version>${jetty.version}</version>
-        </dependency>
-
         <!-- Gson for JSON serialization -->
         <dependency>
             <groupId>com.google.code.gson</groupId>

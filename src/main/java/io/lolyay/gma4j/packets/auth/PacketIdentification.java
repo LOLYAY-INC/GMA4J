@@ -1,6 +1,8 @@
 package io.lolyay.gma4j.packets.auth;
 
 import io.lolyay.gma4j.net.Packet;
+import io.lolyay.gma4j.net.client.GMA4JClientSettings;
+import io.lolyay.gma4j.net.client.GMA4JImplWebSocketClient;
 
 /**
  * Client identification packet sent after authentication.
@@ -10,8 +12,8 @@ import io.lolyay.gma4j.net.Packet;
  * {@link io.lolyay.gma4j.net.server.AuthenticationManager#getClientById(String)}.
  * </p>
  * <p>
- * This packet is automatically sent by {@link io.lolyay.gma4j.net.client.SecureWebSocketClient}
- * if a client identifier is configured in {@link io.lolyay.gma4j.net.client.ClientSettings}.
+ * This packet is automatically sent by {@link GMA4JImplWebSocketClient}
+ * if a client identifier is configured in {@link GMA4JClientSettings}.
  * </p>
  * 
  * @since 1.0.0

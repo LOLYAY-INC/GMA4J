@@ -4,19 +4,21 @@ import io.lolyay.gma4j.net.Packet;
 import io.lolyay.gma4j.net.PacketCodec;
 import io.lolyay.gma4j.net.PacketCodecV2;
 import io.lolyay.gma4j.net.PacketSocket;
-import org.eclipse.jetty.websocket.api.Session;
-
-import java.io.IOException;
+import org.java_websocket.WebSocket;
 
 /**
- * Client-side PacketSocket that wraps a Jetty WebSocket Session.
+ * Client-side PacketSocket that wraps a Java-WebSocket connection.
  */
 public class ClientPacketSocket implements PacketSocket {
-    private Session session;
+    private WebSocket connection;
     private int compressionThreshold = -1; // Disabled by default
 
-    public void setSession(Session session) {
-        this.session = session;
+    public void setConnection(WebSocket connection) {
+        this.connection = connection;
+    }
+
+    public void clearConnection() {
+        this.connection = null;
     }
 
     public void setCompressionThreshold(int threshold) {
@@ -25,7 +27,7 @@ public class ClientPacketSocket implements PacketSocket {
 
     @Override
     public void sendPacket(Packet packet) {
-        if (session == null || !session.isOpen()) {
+        if (connection == null || !connection.isOpen()) {
             throw new IllegalStateException("Session is not open");
         }
         
@@ -37,17 +39,17 @@ public class ClientPacketSocket implements PacketSocket {
         }
         
         try {
-            session.getRemote().sendString(json);
-        } catch (IOException e) {
+            connection.send(json);
+        } catch (Exception e) {
             throw new RuntimeException("Failed to send packet", e);
         }
     }
 
-    public Session getSession() {
-        return session;
+    public WebSocket getConnection() {
+        return connection;
     }
 
     public boolean isConnected() {
-        return session != null && session.isOpen();
+        return connection != null && connection.isOpen();
     }
 }
