@@ -1,6 +1,6 @@
 # GMA4J - Secure WebSocket Library
 
-[![Maven](https://img.shields.io/badge/maven-v1.1.0-blue)](https://maven.lolyay.dev/releases)
+[![Maven](https://img.shields.io/badge/maven-v1.1.2-blue)](https://maven.lolyay.dev/releases)
 [![Java](https://img.shields.io/badge/java-24-orange)](https://openjdk.org/)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -30,7 +30,7 @@
     <dependency>
         <groupId>io.lolyay.gma4j</groupId>
         <artifactId>GMA4J</artifactId>
-        <version>1.1.0</version>
+        <version>1.1.2</version>
     </dependency>
 </dependencies>
 ```
@@ -42,7 +42,7 @@ repositories {
 }
 
 dependencies {
-    implementation 'io.lolyay.gma4j:GMA4J:1.1.0'
+    implementation 'io.lolyay.gma4j:GMA4J:1.1.2'
 }
 ```
 
@@ -204,7 +204,7 @@ Set<String> identifiers = authManager.getAllClientIdentifiers();
 authManager.broadcast(new PacketGameUpdate("announcement", "Server maintenance tonight"));
 ```
 
-### Client: Automatic Identification (v1.1.0+)
+### Client: Automatic Identification (v1.1.2+)
 ```java
 ClientSettings settings = ClientSettings.builder()
     .setClientIdentifier("smp")  // Your unique ID
@@ -363,7 +363,7 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 ## 🔗 Links
 
 - **Maven Repository**: https://maven.lolyay.dev/releases
-- **Coordinates**: `io.lolyay.gma4j:GMA4J:1.1.0`
+- **Coordinates**: `io.lolyay.gma4j:GMA4J:1.1.2`
 - **Jetty Documentation**: https://eclipse.dev/jetty/documentation/
 
 ---

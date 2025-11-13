@@ -6,7 +6,7 @@
 
     <groupId>io.lolyay.gma4j</groupId>
     <artifactId>GMA4J</artifactId>
-    <version>1.1.0</version>
+    <version>1.1.2</version>
 
     <name>GMA4J</name>
     <description>Secure WebSocket library with AES-256 encryption and HMAC authentication</description>
@@ -20,8 +20,8 @@
     </distributionManagement>
 
     <properties>
-        <maven.compiler.source>24</maven.compiler.source>
-        <maven.compiler.target>24</maven.compiler.target>
+        <maven.compiler.source>17</maven.compiler.source>
+        <maven.compiler.target>17</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <jetty.version>11.0.17</jetty.version>
     </properties>
