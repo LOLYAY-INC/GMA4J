@@ -1,375 +1,129 @@
-# GMA4J - Secure WebSocket Library
+# GMA4J
 
-[![Maven](https://img.shields.io/badge/maven-v1.2.0-blue)](https://maven.lolyay.dev/releases)
-[![Java](https://img.shields.io/badge/java-17-orange)](https://openjdk.org/)
-[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+Secure, transport-agnostic messaging for Java (with JS and Python clients planned). 
 
-**GMA4J** (Generic Messaging Architecture for Java) is a production-ready WebSocket library with built-in security, client identification, and type-safe messaging.
+GMA4J gives you auth, end-to-end encryption, with pluggable transports (WebSocket or raw TCP(Netty)), all in one **modular** library.
 
-## 🚀 Features
+## What you get
 
-- 🔒 **AES-256 Encryption** - All messages encrypted after authentication
-- 🔑 **HMAC-SHA256 Authentication** - Challenge-response with API key verification
-- 🎯 **Client Identification** - Target specific clients by custom ID (e.g., "smp", "ffa", "game-1")
-- 📦 **Type-Safe Packets** - Gson-based serialization with automatic type handling
-- ⚡ **Easy Integration** - Drop into existing Jetty servers at any path
-- 📚 **Full Documentation** - Comprehensive Javadocs and tutorials included
+- **End-to-end encryption** negotiated on connect: ephemeral ECDH (P-256) key agreement, AES-256-GCM.
+- **Trust-on-first-use server pinning** (SSH `known_hosts` style), so a swapped server key is detected and rejected.
+- **Pluggable authentication** after encryption is up: none, API key, HMAC-SHA256, or ECDSA, all **modular**.
+- **Modular**: depend only on the client and the transport(s) you need.
 
-## 📦 Installation
+## Modules
 
-### Maven
+| Artifact | Purpose                                                                 | Depends on |
+|---|-------------------------------------------------------------------------|---|
+| `gma4j-shared` | Codec, encryption, auth primitives, Contains every part of the protocol | (base) |
+| `gma4j-client` | Client stack                                                            | shared |
+| `gma4j-server` | Server stack + server-side transports                                   | shared |
+| `gma4j-ws` | Client WebSocket transport (`ws`, `wss`)                                | shared |
+| `gma4j-netty` | Client TCP transport (`gma4j`, `gma`)                                   | shared |
+
+A typical client app depends on `gma4j-client` plus `gma4j-ws` and/or `gma4j-netty`. A server app depends on `gma4j-server`.
+
+## Requirements
+
+- **Java 21+**
+
+## Install
+
 ```xml
 <repositories>
-    <repository>
-        <id>lolyay-releases</id>
-        <url>https://maven.lolyay.dev/releases</url>
-    </repository>
+  <repository>
+    <id>lolyay</id>
+    <url>https://maven.lolyay.dev/releases</url>
+  </repository>
 </repositories>
 
-<dependencies>
-    <dependency>
-        <groupId>io.lolyay.gma4j</groupId>
-        <artifactId>GMA4J</artifactId>
-        <version>1.2.0</version>
-    </dependency>
-</dependencies>
+<!-- Client over WebSocket -->
+<dependency>
+  <groupId>io.lolyay.gma4j</groupId>
+  <artifactId>gma4j-client</artifactId>
+  <version>3.14.59</version>
+</dependency>
+<dependency>
+  <groupId>io.lolyay.gma4j</groupId>
+  <artifactId>gma4j-ws</artifactId>
+  <version>3.14.59</version>
+</dependency>
+
+<!-- Server -->
+<dependency>
+  <groupId>io.lolyay.gma4j</groupId>
+  <artifactId>gma4j-server</artifactId>
+  <version>3.14.59</version>
+</dependency>
 ```
 
-### Gradle
-```gradle
-repositories {
-    maven { url 'https://maven.lolyay.dev/releases' }
-}
+## Imeplementation details
 
-dependencies {
-    implementation 'io.lolyay.gma4j:GMA4J:1.2.0'
-}
+- **[CLIENT.md](CLIENT.md)** — connecting, authenticating, sending packets, certificate pinning.
+- **[SERVER.md](SERVER.md)** — binding, host keys, auth backends, per-client handling.
+
+
+### Rolling your own auth
+
+Implement a matching pair on `GmaAuthType.CUSTOM`: a `GmaAuthServer` on the server and a `GmaAuthClient` on the client:
+> The server issues a challenge, the client answers it, the server verifies.
+> **Always fold the `stateHash` (the handshake transcript) into the answer**, so a captured response can't be replayed on another session.
+
+#### Auth handshake
+
+```text
+       C = client                                     S = server
+
+ 1.  C -> S   extraAuthData()           client's opaque extra data
+ 2.  C <- S   createChallenge(extra)    server builds a challenge (may use the extra data)
+ 3.  C -> S   auth(challenge)           client answers the challenge
+ 4.       S    verifyClientResponse(…)   server accepts or rejects the answer
 ```
 
-## 🔧 Quick Start
-
-### Server-Side: Add to Your Jetty Server
-
+Server side:
 ```java
-import io.lolyay.gma4j.net.*;
-import io.lolyay.gma4j.net.server.*;
-import io.lolyay.gma4j.packets.auth.*;
-import org.eclipse.jetty.server.Server;
-import org.eclipse.jetty.servlet.ServletContextHandler;
-import org.eclipse.jetty.websocket.server.config.JettyWebSocketServletContainerInitializer;
+import io.lolyay.gma4j.net.codec.auth.GmaAuthType;
+import io.lolyay.gma4j.net.codec.auth.server.GmaAuthServer;
 
-public class GameServer {
-    public static void main(String[] args) throws Exception {
-        // 1. Register packets
-        PacketRegistry.register(PacketPublicKey.class);
-        PacketRegistry.register(PacketSharedSecret.class);
-        PacketRegistry.register(PacketChallenge.class);
-        PacketRegistry.register(PacketChallengeResponse.class);
-        PacketRegistry.register(PacketAuthSuccess.class);
-        PacketRegistry.register(PacketAuthFailed.class);
-        PacketRegistry.register(PacketIdentification.class);
-        
-        // Register your custom packets
-        PacketRegistry.register(PacketGameUpdate.class);
-        
-        // 2. Create authentication manager
-        AuthenticationManager authManager = new AuthenticationManager("your-api-key");
-        
-        // 3. Create packet handler
-        SecureServerHandler.SecurePacketHandler handler = new SecureServerHandler.SecurePacketHandler() {
-            @Override
-            public void onAuthenticated(AuthenticatedClient client) {
-                System.out.println("✓ Client authenticated: " + client.getClientId());
-            }
-            
-            @Override
-            public void onIdentified(AuthenticatedClient client, String identifier) {
-                System.out.println("✓ Client identified as: " + identifier);
-            }
-            
-            @Override
-            public void onPacket(AuthenticatedClient client, Packet packet) {
-                if (packet instanceof PacketGameUpdate) {
-                    PacketGameUpdate update = (PacketGameUpdate) packet;
-                    System.out.println("Game update from " + client.getClientIdentifier() + 
-                                     ": " + update.getAction());
-                }
-            }
-            
-            @Override
-            public void onDisconnect(AuthenticatedClient client) {
-                System.out.println("✗ Client disconnected: " + client.getClientIdentifier());
-            }
-        };
-        
-        // 4. Create secure handler
-        SecureServerHandler secureHandler = new SecureServerHandler(handler, authManager);
-        
-        // 5. Add to Jetty server
-        Server server = new Server(8080);
-        ServletContextHandler context = new ServletContextHandler(ServletContextHandler.SESSIONS);
-        context.setContextPath("/");
-        server.setHandler(context);
-        
-        JettyWebSocketServletContainerInitializer.configure(context, (servletContext, wsContainer) -> {
-            wsContainer.addMapping("/ws/game", (req, resp) -> secureHandler);
-        });
-        
-        server.start();
-        System.out.println("🚀 Server running on ws://localhost:8080/ws/game");
-        server.join();
+public class MyAuthServer implements GmaAuthServer {
+    private final byte[] secret;
+    public MyAuthServer(byte[] secret) { this.secret = secret; }
+
+    @Override public GmaAuthType authType() { return GmaAuthType.CUSTOM; }
+
+    @Override public byte[] createChallenge(UUID clientId, String claimedClientId, byte[] clientExtraData) {
+        byte[] nonce = new byte[32];
+        new SecureRandom().nextBytes(nonce);
+        return nonce; // stored per-connection and passed back to verify
+    }
+
+    @Override public boolean verifyClientResponse(byte[] challenge, byte[] response,
+                                                  UUID clientId, String claimedClientId, byte[] stateHash) {
+        return MessageDigest.isEqual(response, hmac(secret, concat(challenge, stateHash)));
     }
 }
 ```
 
-### Client-Side: Connect and Authenticate
-
+Client side (mirror):
 ```java
-import io.lolyay.gma4j.net.*;
-import io.lolyay.gma4j.net.client.*;
-import io.lolyay.gma4j.packets.auth.*;
+import io.lolyay.gma4j.net.codec.auth.GmaAuthType;
+import io.lolyay.gma4j.net.codec.auth.client.GmaAuthClient;
 
-public class GameClient {
-    public static void main(String[] args) throws Exception {
-        // 1. Register packets (same as server)
-        PacketRegistry.register(PacketPublicKey.class);
-        PacketRegistry.register(PacketSharedSecret.class);
-        PacketRegistry.register(PacketChallenge.class);
-        PacketRegistry.register(PacketChallengeResponse.class);
-        PacketRegistry.register(PacketAuthSuccess.class);
-        PacketRegistry.register(PacketAuthFailed.class);
-        PacketRegistry.register(PacketIdentification.class);
-        PacketRegistry.register(PacketGameUpdate.class);
+public class MyAuthClient implements GmaAuthClient {
+    private final byte[] secret;
+    public MyAuthClient(byte[] secret) { this.secret = secret; }
 
-        // 2. Create settings with automatic identification
-        GMA4JClientSettings settings = GMA4JClientSettings.builder()
-                .setClientIdentifier("smp")  // Automatically sent after auth
-                .setIdentificationMetadata("version:1.20.1,players:42")
-                .build();
+    @Override public GmaAuthType authType() { return GmaAuthType.CUSTOM; }
+    
+    @Override public byte[] extraAuthData(){
+        return new byte[0]; // You can add extra data here the server will receive when issuing a challenge
+    }
 
-        // 3. Create client with handler
-        GMA4JImplWebSocketClient client = new GMA4JImplWebSocketClient(
-                "your-api-key",
-                new GMA4JImplWebSocketClient.SecurePacketHandler() {
-                    @Override
-                    public void onAuthenticated(GMA4JImplWebSocketClient client) {
-                        System.out.println("✓ Authenticated and identified!");
-
-                        // Send game updates
-                        client.sendPacket(new PacketGameUpdate("player_join", "Steve"));
-                    }
-
-                    @Override
-                    public void onPacket(GMA4JImplWebSocketClient client, Packet packet) {
-                        if (packet instanceof PacketGameUpdate) {
-                            PacketGameUpdate update = (PacketGameUpdate) packet;
-                            System.out.println("Received: " + update.getAction());
-                        }
-                    }
-
-                    @Override
-                    public void onDisconnect(GMA4JImplWebSocketClient client) {
-                        System.out.println("✗ Disconnected from server");
-                    }
-                },
-                settings
-        );
-
-        // 4. Connect
-        client.connect("ws://localhost:8080/ws/game");
-
-        // Keep alive
-        Thread.sleep(Long.MAX_VALUE);
+    @Override public byte[] auth(byte[] challenge, UUID internalClientId, String clientId, byte[] stateHash) {
+        return hmac(secret, concat(challenge, stateHash));
     }
 }
 ```
 
-## 🎯 Client Identification System
 
-Target specific clients by their custom identifier:
-
-### Server: Send to Specific Client
-```java
-// Get client by identifier
-AuthenticatedClient smpServer = authManager.getClientById("smp");
-if (smpServer != null && smpServer.isConnected()) {
-    smpServer.sendPacket(new PacketGameUpdate("restart", "Server restarting in 5 minutes"));
-}
-
-// Get all identifiers
-Set<String> identifiers = authManager.getAllClientIdentifiers();
-// Output: [smp, ffa, creative, survival]
-
-// Broadcast to all
-authManager.broadcast(new PacketGameUpdate("announcement", "Server maintenance tonight"));
-```
-
-### Client: Automatic Identification (v1.2.0+)
-```java
-GMA4JClientSettings settings = GMA4JClientSettings.builder()
-    .setClientIdentifier("smp")  // Your unique ID
-    .setIdentificationMetadata("version:1.20.1,type:survival")
-    .build();
-
-GMA4JImplWebSocketClient client = new GMA4JImplWebSocketClient(apiKey, handler, settings);
-// Identification is sent automatically after authentication!
-```
-
-## 📝 Custom Packets
-
-Create your own packet types:
-
-```java
-import io.lolyay.gma4j.net.Packet;
-
-public class PacketGameUpdate implements Packet {
-    private String action;
-    private String data;
-    
-    public PacketGameUpdate() {} // Required for Gson
-    
-    public PacketGameUpdate(String action, String data) {
-        this.action = action;
-        this.data = data;
-    }
-    
-    public String getAction() { return action; }
-    public String getData() { return data; }
-}
-
-// Register it
-PacketRegistry.register(PacketGameUpdate.class);
-
-// Use it
-client.sendPacket(new PacketGameUpdate("player_move", "x:100,y:64,z:200"));
-```
-
-## 🔐 Authentication Flow
-
-1. **Client connects** → Sends RSA public key
-2. **Server generates AES secret** → Encrypts with client's public key
-3. **Client decrypts secret** → Both now share AES-256 key
-4. **Server sends challenge** → Encrypted random string
-5. **Client computes HMAC** → Uses API key + challenge
-6. **Server verifies HMAC** → Authentication succeeds ✓
-7. **Client sends identification** → Optional custom ID (e.g., "smp")
-8. **All messages encrypted** → AES-256-GCM with authentication tags
-
-## 📚 Documentation
-
-- **[INTEGRATION.md](INTEGRATION.md)** - Server-side integration guide
-- **[CLIENT_TUTORIAL.md](CLIENT_TUTORIAL.md)** - Client-side tutorial
-- **[DEPLOYMENT.md](DEPLOYMENT.md)** - Maven deployment guide
-- **[JAVADOC_SUMMARY.md](JAVADOC_SUMMARY.md)** - API documentation overview
-
-### Generate HTML Javadocs
-```bash
-mvn javadoc:javadoc
-# Output: target/site/apidocs/index.html
-```
-
-## 🏗️ Project Structure
-
-```
-GMA4J/
-├── src/main/java/io/lolyay/gma4j/
-│   ├── net/
-│   │   ├── Packet.java                      # Base packet interface
-│   │   ├── PacketRegistry.java              # Packet type registry
-│   │   ├── PacketCodec.java                 # JSON serialization
-│   │   ├── crypto/
-│   │   │   ├── CryptoUtils.java             # RSA + AES + HMAC
-│   │   │   └── SecurePacketCodec.java       # Encrypted packets
-│   │   ├── server/
-│   │   │   ├── SecureServerHandler.java     # Server WebSocket handler
-│   │   │   ├── AuthenticationManager.java   # Client management
-│   │   │   └── AuthenticatedClient.java     # Client wrapper
-│   │   └── client/
-│   │       ├── GMA4JImplWebSocketClient.java # Secure client implementation
-│   │       ├── GMA4JWebSocketClient.java     # Enhanced client (version/ping, etc.)
-│   │       └── GMA4JClientSettings.java      # Client configuration
-│   └── packets/
-│       └── auth/                            # Authentication packets
-└── docs/
-    ├── INTEGRATION.md                       # Server guide
-    ├── CLIENT_TUTORIAL.md                   # Client guide
-    └── DEPLOYMENT.md                        # Deployment guide
-```
-
-## 🔧 Advanced Features
-
-### Client Settings
-```java
-GMA4JClientSettings settings = GMA4JClientSettings.builder()
-    .setClientIdentifier("game-server-1")
-    .setIdentificationMetadata("version:1.0.0")
-    .setAutoReconnect(true)
-    .setMaxReconnectAttempts(5)
-    .setReconnectDelay(Duration.ofSeconds(3))
-    .setEnablePing(true)
-    .setPingInterval(Duration.ofSeconds(30))
-    .setConnectionTimeout(Duration.ofSeconds(10))
-    .build();
-```
-
-### Metadata
-```java
-// Server side
-AuthenticatedClient client = authManager.getClientById("smp");
-String metadata = client.getMetadata();
-// Parse: "version:1.20.1,players:42,maxPlayers:100"
-
-// Client side: configure identification metadata via settings builder
-GMA4JClientSettings settingsWithMetadata = GMA4JClientSettings.builder()
-    .setClientIdentifier("smp")
-    .setIdentificationMetadata("region:us-east,type:pvp")
-    .build();
-```
-
-## 🛡️ Security Features
-
-- **AES-256-GCM** encryption with authentication tags
-- **HMAC-SHA256** challenge-response authentication
-- **RSA-2048** key exchange for shared secret
-- **Random IV** for each encrypted message
-- **Replay attack protection** via challenge system
-- **No plaintext transmission** after initial handshake
-
-## 📊 Performance
-
-- **Encryption overhead**: ~1-2ms per message
-- **Memory efficient**: Streaming JSON parsing
-- **Thread-safe**: Concurrent client handling
-- **Scalable**: Tested with 1000+ simultaneous connections
-
-## 🤝 Use Cases
-
-- **Game Servers** - Minecraft, FFA, Survival servers with player identification
-- **Microservices** - Secure inter-service communication
-- **IoT Devices** - Authenticated device-to-server messaging
-- **Real-time Apps** - Chat, notifications, live updates
-- **Control Panels** - Remote server management and monitoring
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-## 💬 Support
-
-- **Issues**: [GitHub Issues](https://github.com/lolyay/GMA4J/issues)
-- **Documentation**: See [INTEGRATION.md](INTEGRATION.md) and [CLIENT_TUTORIAL.md](CLIENT_TUTORIAL.md)
-- **Javadocs**: Run `mvn javadoc:javadoc`
-
-## 🔗 Links
-
-- **Maven Repository**: https://maven.lolyay.dev/releases
-- **Coordinates**: `io.lolyay.gma4j:GMA4J:1.2.0`
-- **Jetty Documentation**: https://eclipse.dev/jetty/documentation/
-
----
-
-**Built with ❤️ for secure WebSocket communication**
+Then register `new MyAuthServer(secret)` in `ServerBindInfo` and `new MyAuthClient(secret)` in `ClientConnectionInfo`.
