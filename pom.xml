@@ -6,7 +6,7 @@
 
     <groupId>io.lolyay.gma4j</groupId>
     <artifactId>gma4j-parent</artifactId>
-    <version>3.14.59</version>
+    <version>3.14.60</version>
     <packaging>pom</packaging>
 
     <name>GMA4J Parent</name>

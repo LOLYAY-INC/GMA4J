@@ -46,7 +46,7 @@ public class ClientOnServer implements ServerConnectionListener, IPacketHandler 
         this.netServer = netServer;
         this.remoteId = remoteId;
         this.encryptionState = new ServerEncryptionState(netServer.getCertificateProvider(), netServer::getSupportedAuthTypes);
-        this.pipeline = new PacketPipeline(new PacketDistributorImpl(new ServerDefaultSystemPacketCallback(this), this));
+        this.pipeline = new PacketPipeline(new PacketDistributorImpl(new ServerDefaultSystemPacketCallback(this), this, () -> authenticated));
     }
 
     @Override

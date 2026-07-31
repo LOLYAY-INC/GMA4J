@@ -8,12 +8,12 @@
 <dependency>
   <groupId>io.lolyay.gma4j</groupId>
   <artifactId>gma4j-client</artifactId>
-  <version>3.14.59</version>
+  <version>3.14.60</version>
 </dependency>
 <dependency>
   <groupId>io.lolyay.gma4j</groupId>
   <artifactId>gma4j-ws</artifactId>   <!-- ws:// and wss:// -->
-  <version>3.14.59</version>
+  <version>3.14.60</version>
 </dependency>
 <!-- and/or gma4j-netty for gma4j:// (raw TCP) -->
 ```

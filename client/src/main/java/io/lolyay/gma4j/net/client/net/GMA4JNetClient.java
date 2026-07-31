@@ -24,11 +24,7 @@ import lombok.Setter;
 import java.net.URI;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+import java.util.concurrent.*;
 
 @RequiredArgsConstructor
 @Getter
@@ -73,7 +69,7 @@ public class GMA4JNetClient {
         this.pipeline = new PacketPipeline(
                 new PacketDistributorImpl(
                         new ClientDefaultSystemPacketCallback(this),
-                        packetHandler)
+                        packetHandler,() -> authenticated)
         );
         this.serverConnection = new ServerConnection(this, pipeline, packetHandler, claimedClientId, uri);
 
