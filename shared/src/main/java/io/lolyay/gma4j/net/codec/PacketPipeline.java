@@ -79,11 +79,13 @@ public class PacketPipeline {
         byte[] packet = Arrays.copyOfRange(data, 4, data.length);
 
         if(compressed) {
+            int compressedLength = packet.length;
             try {
                 packet = CompressionUtil.decompress(packet);
             } catch (DataFormatException e) {
                 throw new PacketCodingException("Error while decompressing packet", e);
             }
+            log.debug("Decompressed incoming packet {}: {} -> {} bytes", packetId, compressedLength, packet.length);
         }
 
         try {
@@ -106,12 +108,14 @@ public class PacketPipeline {
         }
 
         if(payload.length >= SharedConfig.PACKET_COMPRESSION_THRESHOLD) {
+            int uncompressedLength = payload.length;
             try {
                 payload = CompressionUtil.compress(payload);
             } catch (Exception e) {
                 throw new PacketCodingException("Error compressing packet: " + packetId, e);
             }
             compressed = true;
+            log.debug("Compressed outgoing packet {}: {} -> {} bytes", packetId, uncompressedLength, payload.length);
         }
 
         byte[] encodedPacket = new byte[payload.length + 4];
