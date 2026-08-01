@@ -32,6 +32,9 @@ public class ClientOnServer implements ServerConnectionListener, IPacketHandler 
     private MessageSender messageSender;
     private boolean connected = false;
 
+    @Getter
+    @Setter
+    private ClientType clientType;
     @Setter
     private UUID assignedId;
     @Setter

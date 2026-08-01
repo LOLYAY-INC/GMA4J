@@ -6,10 +6,7 @@ import io.lolyay.gma4j.net.codec.systemcodec.c2s.C2SAuthPacket;
 import io.lolyay.gma4j.net.codec.systemcodec.c2s.C2SAuthResponsePacket;
 import io.lolyay.gma4j.net.codec.systemcodec.c2s.C2SHelloPacket;
 import io.lolyay.gma4j.net.codec.systemcodec.c2s.C2SKeepAlivePacket;
-import io.lolyay.gma4j.net.codec.systemcodec.s2c.S2CAuthChallengePacket;
-import io.lolyay.gma4j.net.codec.systemcodec.s2c.S2CAuthStatusPacket;
-import io.lolyay.gma4j.net.codec.systemcodec.s2c.S2CHelloPacket;
-import io.lolyay.gma4j.net.codec.systemcodec.s2c.S2CKeepAlivePacket;
+import io.lolyay.gma4j.net.codec.systemcodec.s2c.*;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import lombok.Getter;
 
@@ -45,6 +42,11 @@ public class SystemCodec {
 
     public static final PacketType<S2CKeepAlivePacket> S_2_C_KEEPALIVE_PACKET =
             register(new PacketType<>(7, S2CKeepAlivePacket.CODEC));
+
+
+    public static final PacketType<S2CCodecStateUpdatePacket> S_2_C_CODEC_STATE_UPDATE =
+            register(new PacketType<>(8, S2CCodecStateUpdatePacket.CODEC));
+
 
 
 

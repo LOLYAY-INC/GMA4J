@@ -4,12 +4,19 @@ import io.lolyay.gma4j.net.shared.CodecHasher;
 import io.lolyay.gma4j.net.shared.CodecType;
 import lombok.SneakyThrows;
 
-import java.util.function.BiFunction;
 import java.util.function.Function;
 
-public record CustomCodec<T extends GMAPacket<T>>(Class<T> clazz,
-                                                  Function<T, byte[]> serializer,
-                                                  Function<byte[],T> deserializer) implements ICodec<T> {
+
+public final class CustomCodec<T extends GMAPacket<T>> extends ImplCodec<T> implements ICodec<T> {
+    private final Function<T, byte[]> serializer;
+    private final Function<byte[],T> deserializer;
+
+    public CustomCodec(Class<T> clazz, Function<T, byte[]> serializer, Function<byte[], T> deserializer) {
+        super(clazz);
+        this.serializer = serializer;
+        this.deserializer = deserializer;
+    }
+
     @Override
     public byte[] serialize(T packet) {
         return serializer.apply(packet);
@@ -26,7 +33,7 @@ public record CustomCodec<T extends GMAPacket<T>>(Class<T> clazz,
     @Override
     @SneakyThrows
     public byte[] hash() {
-        return CodecHasher.fingerprint(clazz);
+        return CodecHasher.fingerprint(getClazz());
     }
 
     @Override

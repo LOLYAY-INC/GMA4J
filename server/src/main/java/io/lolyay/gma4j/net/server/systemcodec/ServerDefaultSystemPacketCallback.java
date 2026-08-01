@@ -1,5 +1,7 @@
 package io.lolyay.gma4j.net.server.systemcodec;
 
+import io.lolyay.gma4j.net.codec.ClientType;
+import io.lolyay.gma4j.net.codec.CodecRegistry;
 import io.lolyay.gma4j.net.codec.auth.server.GmaAuthServer;
 import io.lolyay.gma4j.net.codec.encryption.server.ServerEncryptionState;
 import io.lolyay.gma4j.net.codec.packet.GMAPacket;
@@ -8,10 +10,7 @@ import io.lolyay.gma4j.net.codec.systemcodec.c2s.C2SAuthResponsePacket;
 import io.lolyay.gma4j.net.codec.systemcodec.c2s.C2SHelloPacket;
 import io.lolyay.gma4j.net.codec.systemcodec.c2s.C2SKeepAlivePacket;
 import io.lolyay.gma4j.net.codec.systemcodec.callbacks.SystemPacketCallback;
-import io.lolyay.gma4j.net.codec.systemcodec.s2c.S2CAuthChallengePacket;
-import io.lolyay.gma4j.net.codec.systemcodec.s2c.S2CAuthStatusPacket;
-import io.lolyay.gma4j.net.codec.systemcodec.s2c.S2CHelloPacket;
-import io.lolyay.gma4j.net.codec.systemcodec.s2c.S2CKeepAlivePacket;
+import io.lolyay.gma4j.net.codec.systemcodec.s2c.*;
 import io.lolyay.gma4j.net.server.net.ClientOnServer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -37,6 +36,7 @@ public class ServerDefaultSystemPacketCallback implements SystemPacketCallback {
 
     private void onC2SHello(C2SHelloPacket packet) {
         String compatError = client.verifyCompatibility(packet);
+        client.setClientType(packet.clientType());
         if(compatError != null) {
             log.error("Client {} is not compatible with server: {}", client.getRemoteId(), compatError);
             client.disconnect("Incompatible client, " + compatError);
@@ -126,6 +126,10 @@ public class ServerDefaultSystemPacketCallback implements SystemPacketCallback {
             client.send(new S2CAuthStatusPacket(false));
             client.disconnect("Auth failed");
             return;
+        }
+        if(client.getClientType() != ClientType.GMA4J_JAVA) {
+            // Send Compat packet
+            client.send(S2CCodecStateUpdatePacket.of(CodecRegistry.getInstance().getConfig()));
         }
 
         client.setAuthenticated(true);

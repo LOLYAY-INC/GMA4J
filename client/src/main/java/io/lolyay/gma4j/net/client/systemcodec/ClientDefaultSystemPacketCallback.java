@@ -6,10 +6,7 @@ import io.lolyay.gma4j.net.codec.packet.GMAPacket;
 import io.lolyay.gma4j.net.codec.systemcodec.c2s.C2SAuthPacket;
 import io.lolyay.gma4j.net.codec.systemcodec.c2s.C2SAuthResponsePacket;
 import io.lolyay.gma4j.net.codec.systemcodec.callbacks.SystemPacketCallback;
-import io.lolyay.gma4j.net.codec.systemcodec.s2c.S2CAuthChallengePacket;
-import io.lolyay.gma4j.net.codec.systemcodec.s2c.S2CAuthStatusPacket;
-import io.lolyay.gma4j.net.codec.systemcodec.s2c.S2CHelloPacket;
-import io.lolyay.gma4j.net.codec.systemcodec.s2c.S2CKeepAlivePacket;
+import io.lolyay.gma4j.net.codec.systemcodec.s2c.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -26,6 +23,7 @@ public class ClientDefaultSystemPacketCallback implements SystemPacketCallback {
             case S2CAuthChallengePacket s2CAuthChallengePacket -> onS2CAuthChallenge(s2CAuthChallengePacket);
             case S2CAuthStatusPacket s2CAuthStatusPacket -> onAuthStatus(s2CAuthStatusPacket);
             case S2CKeepAlivePacket s2CKeepAlivePacket -> netClient.onKeepAlive();
+            case S2CCodecStateUpdatePacket codecStateUpdatePacket -> log.warn("Received codec state update packet, even tho we are Java?");
 
             default -> throw new IllegalStateException("Unexpected value: " + packet);
         }

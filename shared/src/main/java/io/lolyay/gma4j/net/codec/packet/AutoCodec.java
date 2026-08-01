@@ -10,18 +10,17 @@ import java.nio.charset.StandardCharsets;
 
 import static io.lolyay.gma4j.net.shared.GsonUtil.GSON;
 
-public final class AutoCodec<T extends GMAPacket<T>> implements ICodec<T> {
-    private final Class<T> clazz;
+public final class AutoCodec<T extends GMAPacket<T>> extends ImplCodec<T> implements ICodec<T> {
 
     public AutoCodec(Class<T> clazz) {
-        this.clazz = clazz;
+        super(clazz);
     }
 
 
     @Override
     public byte[] serialize(T packet) {
         return switch (SharedConfig.DEFAULT_CODEC_TYPE) {
-            case BINARY_CUSTOM -> throw new NoCodecException("No codec for packet " + clazz.getSimpleName());
+            case BINARY_CUSTOM -> throw new NoCodecException("No codec for packet " + getClazz().getSimpleName());
             case GMDT -> throw new UnsupportedOperationException("GMDT codec not supported yet");
             case JSON_GSON -> GSON.toJson(packet).getBytes(StandardCharsets.UTF_8);
         };
@@ -37,12 +36,12 @@ public final class AutoCodec<T extends GMAPacket<T>> implements ICodec<T> {
     }
 
     private T jsonD(byte[] data) {
-        return GSON.fromJson(new String(data, StandardCharsets.UTF_8), clazz);
+        return GSON.fromJson(new String(data, StandardCharsets.UTF_8), getClazz());
     }
 
     @SneakyThrows
     @Override
     public byte[] hash() {
-        return CodecHasher.fingerprint(clazz);
+        return CodecHasher.fingerprint(getClazz());
     }
 }
