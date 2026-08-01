@@ -1,5 +1,6 @@
 package io.lolyay.gma4j.net.codec.systemcodec.c2s;
 
+import io.lolyay.gma4j.net.codec.ClientType;
 import io.lolyay.gma4j.net.codec.auth.GmaAuthType;
 import io.lolyay.gma4j.net.codec.encryption.EncryptionMode;
 import io.lolyay.gma4j.net.codec.encryption.utils.DHUtil;
@@ -16,6 +17,7 @@ import java.util.List;
 public record C2SHelloPacket(
     short gma4jVersion,
     String connectUri,
+    ClientType clientType,
 
     // Codec
     short sysCodecVersion,
@@ -53,6 +55,8 @@ public record C2SHelloPacket(
 
                 writer.writePrefixedBytes(packet.connectUri().getBytes(StandardCharsets.UTF_8));
 
+                writer.writeByte(packet.clientType().ordinal());
+
                 writer.writeByte(packet.sysCodecVersion());
                 writer.writeByte(packet.encVersion());
                 writer.writeBytes(packet.codecHash());
@@ -73,6 +77,7 @@ public record C2SHelloPacket(
                 return new C2SHelloPacket(
                         reader.readShort(),
                         new String(reader.readPrefixedBytes(MAX_CUSTOM_AUTH_DATA_SIZE), StandardCharsets.UTF_8),
+                        ClientType.values()[reader.readByte() & 0xFF],
                         (short) (reader.readByte() & 0xFF),
                         reader.readByte() & 0xFF,
                         reader.readBytes(16),

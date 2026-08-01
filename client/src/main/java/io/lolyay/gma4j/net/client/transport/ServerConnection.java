@@ -1,6 +1,7 @@
 package io.lolyay.gma4j.net.client.transport;
 
 import io.lolyay.gma4j.net.client.net.GMA4JNetClient;
+import io.lolyay.gma4j.net.codec.ClientType;
 import io.lolyay.gma4j.net.codec.PacketPipeline;
 import io.lolyay.gma4j.net.codec.auth.client.GmaAuthClient;
 import io.lolyay.gma4j.net.codec.connection.IConnectionStateCallback;
@@ -52,6 +53,7 @@ public class ServerConnection implements ClientConnectionListener { // client ha
         C2SHelloPacket helloPacket = new C2SHelloPacket(
                 ENV.GMA4J_VERSION,
                 uri,
+                ClientType.GMA4J_JAVA,
                 ENV.SYSTEM_CODEC_VERSION,
                 ENV.ENCRYPTION_CODEC_VERSION,
                 netClient.getCodecRegistry().getConfig().globalCodecState(),
