@@ -1,5 +1,6 @@
 package io.lolyay.gma4j.net.server.net;
 
+import io.lolyay.gma4j.net.codec.ClientType;
 import io.lolyay.gma4j.net.codec.PacketPipeline;
 import io.lolyay.gma4j.net.codec.auth.server.GmaAuthServer;
 import io.lolyay.gma4j.net.codec.connection.MessageSender;
@@ -111,7 +112,7 @@ public class ClientOnServer implements ServerConnectionListener, IPacketHandler 
             return "Encryption codec version mismatch: Client: " + helloPacket.encVersion() + " != Our: " + ENV.ENCRYPTION_CODEC_VERSION;
         if(helloPacket.gma4jVersion() != ENV.GMA4J_VERSION)
             log.warn("Client {} is using a different version of GMA4J, please update!", remoteId);
-        if(!Arrays.equals(helloPacket.codecHash(), netServer.getCodecRegistry().getConfig().globalCodecState()))
+        if(helloPacket.clientType() == ClientType.GMA4J_JAVA && !Arrays.equals(helloPacket.codecHash(), netServer.getCodecRegistry().getConfig().globalCodecState()))
             return "Codec hash mismatch: Client: " + Arrays.toString(helloPacket.codecHash()) + " != Our: " + Arrays.toString(netServer.getCodecRegistry().getConfig().globalCodecState());
         return null;
     }
