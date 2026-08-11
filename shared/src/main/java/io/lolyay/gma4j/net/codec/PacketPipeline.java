@@ -16,6 +16,8 @@ import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.zip.DataFormatException;
 
+import static io.lolyay.gma4j.net.shared.SharedConfig.REJECT_COMPRESSED_PACKETS;
+
 @Slf4j
 @RequiredArgsConstructor
 public class PacketPipeline {
@@ -37,21 +39,8 @@ public class PacketPipeline {
         return encoded;
     }
 
-    public <T extends GMAPacket<T>> T decode(byte[] data) {
-        if(isClosed) throw new IllegalStateException("PacketPipeline is closed");
-        if(cryptor != null) {
-            data = cryptor.decrypt(data);
-        }
-        return decodePacket(data);
-    }
-
     public <T extends GMAPacket<T>> void decodeAndPassDown(byte[] data) {
-        if(isClosed) throw new IllegalStateException("PacketPipeline is closed");
-        T packet = decodePacket(data);
-        passDown(packet);
-    }
-
-    private <T extends GMAPacket<T>> void passDown(T packet) {
+        T packet = decode(data);
         try {
             distributor.distribute(packet);
         } catch (Exception e) {
@@ -59,9 +48,19 @@ public class PacketPipeline {
         }
     }
 
-    private <T extends GMAPacket<T>> T decodePacket(byte[] data) throws PacketCodingException {
+    public <T extends GMAPacket<T>> T decode(byte[] data) throws PacketCodingException {
+
+        //checks
+        if(isClosed) throw new IllegalStateException("PacketPipeline is closed");
         if(data.length < 8) throw new PacketCodingException("Packet too short");
 
+        //crypt
+        if(cryptor != null) {
+            data = cryptor.decrypt(data);
+        }
+
+
+        //seq
         int sequence = ByteReader.readInt(data, 0); // 0-3
 
         if(sequence != this.remoteSequence.getAndIncrement()) {
@@ -73,6 +72,8 @@ public class PacketPipeline {
             return null;
         } else
             outOfSequenceCount.set(0);
+
+        // header
 
         boolean compressed = (data[4] & 0x1) != 0; // 4
         //TODO: we currently waste 7 bits here; other compression algos?
@@ -91,7 +92,13 @@ public class PacketPipeline {
 
         byte[] packet = Arrays.copyOfRange(data, 8, data.length); // 8-end
 
+        // decompress
         if(compressed) {
+            if(REJECT_COMPRESSED_PACKETS) {
+                log.warn("Rejecting compressed packet: {}", packetId);
+                return null;
+            }
+
             int compressedLength = packet.length;
             try {
                 packet = CompressionUtil.decompress(packet);
@@ -101,6 +108,7 @@ public class PacketPipeline {
             log.debug("Decompressed incoming packet {}: {} -> {} bytes", packetId, compressedLength, packet.length);
         }
 
+        //apply packet codec
         try {
             return packetType.codec().deserialize(packet, codecType);
         } catch (Exception e) {
@@ -109,11 +117,14 @@ public class PacketPipeline {
     }
 
     private <T extends GMAPacket<T>> byte[] encodePacket(T packet) throws PacketCodingException {
+
+        // gather flags
         byte[] payload;
         boolean compressed = false;
         CodecType codecType = packet.getPacketType().codec().getCodecType();
         int packetId = packet.getPacketType().numericId();
 
+        //apply packet codec
         try {
             payload = packet.getPacketType().codec().serialize(packet);
         } catch (Exception e) {
@@ -121,7 +132,7 @@ public class PacketPipeline {
         }
 
 
-
+        // compress
         if(payload.length >= SharedConfig.PACKET_COMPRESSION_THRESHOLD && SharedConfig.PACKET_COMPRESSION_ENABLED) {
             int uncompressedLength = payload.length;
             try {
@@ -133,6 +144,7 @@ public class PacketPipeline {
             log.debug("Compressed outgoing packet {}: {} -> {} bytes", packetId, uncompressedLength, payload.length);
         }
 
+        // write header
         byte[] encodedPacket = new byte[payload.length + 8];
         ByteWriter.writeInt(encodedPacket, sequence.getAndIncrement(),0);
         encodedPacket[4] = (byte) (compressed ? 1 : 0);
