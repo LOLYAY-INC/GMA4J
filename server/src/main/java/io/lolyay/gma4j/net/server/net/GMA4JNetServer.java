@@ -65,14 +65,20 @@ public class GMA4JNetServer implements ServerClientHandler {
         return authServers.get(type);
     }
 
-    public UUID registerClient(ClientOnServer client, String claimedClientId) {
-        if(clientsByClaimedId.putIfAbsent(claimedClientId, client) != null) {
+    public UUID registerClient(ClientOnServer client) {
+        if(clientsByClaimedId.putIfAbsent(client.getClaimedClientId(), client) != null ||
+                clientsById.put(client.getAssignedId(), client) != null) {
             return null;
         }
-        UUID id;
-        do {
+
+        return client.getAssignedId();
+    }
+
+    public UUID generateFreeUUID(String clientName) {
+        UUID id = UUID.randomUUID();
+        while(clientsById.putIfAbsent(id, null) != null) {
             id = UUID.randomUUID();
-        } while(clientsById.putIfAbsent(id, client) != null);
+        }
         return id;
     }
 

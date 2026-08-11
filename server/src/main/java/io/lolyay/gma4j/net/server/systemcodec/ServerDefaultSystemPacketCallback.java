@@ -88,21 +88,16 @@ public class ServerDefaultSystemPacketCallback implements SystemPacketCallback {
             return;
         }
 
-        UUID assignedId = client.getNetServer().registerClient(client, packet.claimedClientId());
-        if(assignedId == null) {
-            log.warn("Rejecting {}: claimed id '{}' already in use", client.getRemoteId(), packet.claimedClientId());
-            client.send(new S2CAuthStatusPacket(false));
-            client.disconnect("Duplicate client id");
-            return;
-        }
-        client.setAssignedId(assignedId);
+        UUID pendingAuthID = client.getNetServer().generateFreeUUID(packet.claimedClientId());
+
+        client.setAssignedId(pendingAuthID);
         client.setClaimedClientId(packet.claimedClientId());
 
         GmaAuthServer authServer = client.getSelectedAuthServer();
 
-        byte[] challenge = authServer.createChallenge(assignedId, packet.claimedClientId(), packet.extraAuthData());
+        byte[] challenge = authServer.createChallenge(pendingAuthID, packet.claimedClientId(), packet.extraAuthData());
         client.setPendingChallenge(challenge);
-        client.send(new S2CAuthChallengePacket(challenge, assignedId));
+        client.send(new S2CAuthChallengePacket(challenge, pendingAuthID));
     }
 
     private void onC2SAuthResponse(C2SAuthResponsePacket packet) {
@@ -127,6 +122,16 @@ public class ServerDefaultSystemPacketCallback implements SystemPacketCallback {
             client.disconnect("Auth failed");
             return;
         }
+
+        UUID assignedId = client.getNetServer().registerClient(client);
+        if(assignedId == null) {
+            log.warn("Rejecting {}: claimed id '{}' already in use", client.getRemoteId(), client.getClaimedClientId());
+            client.send(new S2CAuthStatusPacket(false));
+            client.disconnect("Duplicate client id");
+            return;
+        }
+
+
         if(client.getClientType() != ClientType.GMA4J_JAVA) {
             // Send Compat packet
             client.send(S2CCodecStateUpdatePacket.of(CodecRegistry.getInstance().getConfig()));
