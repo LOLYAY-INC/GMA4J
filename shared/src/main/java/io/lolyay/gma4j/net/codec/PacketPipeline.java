@@ -122,7 +122,7 @@ public class PacketPipeline {
 
 
 
-        if(payload.length >= SharedConfig.PACKET_COMPRESSION_THRESHOLD) {
+        if(payload.length >= SharedConfig.PACKET_COMPRESSION_THRESHOLD && SharedConfig.PACKET_COMPRESSION_ENABLED) {
             int uncompressedLength = payload.length;
             try {
                 payload = CompressionUtil.compress(payload);
