@@ -9,6 +9,7 @@ public class SharedConfig {
     public static boolean FORCE_CODEC = false;
     public static int MAX_PACKET_SIZE = 1024 * 1024;
     public static int MAX_OUT_OF_ORDER = 3;
+    public static int NETWORK_THREADS = 4;
     // Compression
     public static boolean PACKET_COMPRESSION_ENABLED = true;
     public static int PACKET_COMPRESSION_THRESHOLD = 256;

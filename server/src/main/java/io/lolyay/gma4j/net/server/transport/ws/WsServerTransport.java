@@ -2,30 +2,39 @@ package io.lolyay.gma4j.net.server.transport.ws;
 
 import io.lolyay.gma4j.net.codec.connection.server.ServerClientHandler;
 import io.lolyay.gma4j.net.codec.connection.server.ServerConnectionListener;
+import io.lolyay.gma4j.net.shared.SharedConfig;
 import io.lolyay.gma4j.net.transport.IServerTransport;
 import io.lolyay.gma4j.net.transport.ServerTransportData;
 import org.java_websocket.WebSocket;
 import org.java_websocket.drafts.Draft;
+import org.java_websocket.drafts.Draft_6455;
 import org.java_websocket.exceptions.InvalidDataException;
 import org.java_websocket.handshake.ClientHandshake;
 import org.java_websocket.handshake.ServerHandshakeBuilder;
+import org.java_websocket.protocols.Protocol;
 import org.java_websocket.server.WebSocketServer;
 
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
+import java.util.Collections;
+import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 
-import static io.lolyay.gma4j.net.transport.TransportConstants.HEADER_GMA_URI;
-import static io.lolyay.gma4j.net.transport.TransportConstants.HEADER_UPGRADE;
-import static io.lolyay.gma4j.net.transport.TransportConstants.UPGRADE_GMA4J;
+import static io.lolyay.gma4j.net.transport.TransportConstants.*;
 
 public class WsServerTransport implements IServerTransport {
 
     private final WebSocketServer server;
 
     public WsServerTransport(ServerTransportData data, ServerClientHandler clientHandler) {
-        this.server = new WebSocketServer(new InetSocketAddress(data.host(), data.port())) {
+        Draft_6455 draft = new Draft_6455(
+                Collections.emptyList(),
+                Collections.singletonList(new Protocol("")),
+                SharedConfig.MAX_PACKET_SIZE
+        );
+
+        this.server = new WebSocketServer(new InetSocketAddress(data.host(), data.port()), SharedConfig.NETWORK_THREADS, List.of(draft)) {
             @Override
             public void onOpen(WebSocket conn, ClientHandshake handshake) {
                 ServerConnectionListener listener = clientHandler.getOrCreateClient(remoteId(conn));
@@ -47,6 +56,10 @@ public class WsServerTransport implements IServerTransport {
 
             @Override
             public void onMessage(WebSocket conn, ByteBuffer message) {
+                if (message.remaining() > SharedConfig.MAX_PACKET_SIZE) {
+                    throw new IllegalArgumentException("Packet too large; Size: %s, max: %s".formatted(message.remaining(), SharedConfig.MAX_PACKET_SIZE));
+                }
+
                 ServerConnectionListener listener = conn.getAttachment();
                 if (listener != null) {
                     byte[] data = new byte[message.remaining()];

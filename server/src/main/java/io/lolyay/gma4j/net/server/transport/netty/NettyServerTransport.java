@@ -1,6 +1,7 @@
 package io.lolyay.gma4j.net.server.transport.netty;
 
 import io.lolyay.gma4j.net.codec.connection.server.ServerClientHandler;
+import io.lolyay.gma4j.net.shared.SharedConfig;
 import io.lolyay.gma4j.net.transport.IServerTransport;
 import io.lolyay.gma4j.net.transport.ServerTransportData;
 import io.netty.bootstrap.ServerBootstrap;
@@ -11,7 +12,6 @@ import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
-import io.netty.handler.codec.protobuf.ProtobufVarint32FrameDecoder;
 import io.netty.handler.codec.protobuf.ProtobufVarint32LengthFieldPrepender;
 
 public class NettyServerTransport implements IServerTransport {
@@ -30,7 +30,7 @@ public class NettyServerTransport implements IServerTransport {
     @Override
     public void start() {
         bossGroup = new NioEventLoopGroup(1);
-        workerGroup = new NioEventLoopGroup();
+        workerGroup = new NioEventLoopGroup(SharedConfig.NETWORK_THREADS);
 
         ServerBootstrap bootstrap = new ServerBootstrap();
         bootstrap.group(bossGroup, workerGroup)
@@ -41,7 +41,7 @@ public class NettyServerTransport implements IServerTransport {
                     @Override
                     protected void initChannel(SocketChannel ch) {
                         ch.pipeline()
-                                .addLast("frameDecoder", new ProtobufVarint32FrameDecoder())
+                                .addLast("frameDecoder", new LimitedVarint32FrameDecoder())
                                 .addLast("frameEncoder", new ProtobufVarint32LengthFieldPrepender())
                                 .addLast("handler", new NettyServerHandler(clientHandler));
                     }

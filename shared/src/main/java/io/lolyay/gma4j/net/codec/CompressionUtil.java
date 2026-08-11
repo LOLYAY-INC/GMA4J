@@ -1,5 +1,7 @@
 package io.lolyay.gma4j.net.codec;
 
+import io.lolyay.gma4j.net.shared.SharedConfig;
+
 import java.io.ByteArrayOutputStream;
 import java.util.zip.DataFormatException;
 import java.util.zip.Deflater;
@@ -42,6 +44,9 @@ public class CompressionUtil {
             int written = inflater.inflate(buffer);
             if (written == 0 && inflater.needsInput()) {
                 break;
+            }
+            if(out.size() >= SharedConfig.MAX_PACKET_SIZE) {
+                throw new DataFormatException("Packet too large after decompression: " + out.size() + " bytes");
             }
             out.write(buffer, 0, written);
         }

@@ -2,16 +2,12 @@ package io.lolyay.gma4j.net.transport.netty;
 
 import io.lolyay.gma4j.net.codec.connection.client.ClientConnectionListener;
 import io.lolyay.gma4j.net.transport.IClientTransport;
+import io.lolyay.gma4j.net.transport.netty.coder.LimitedVarint32FrameDecoder;
 import io.netty.bootstrap.Bootstrap;
-import io.netty.channel.Channel;
-import io.netty.channel.ChannelFutureListener;
-import io.netty.channel.ChannelInitializer;
-import io.netty.channel.ChannelOption;
-import io.netty.channel.EventLoopGroup;
+import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
-import io.netty.handler.codec.protobuf.ProtobufVarint32FrameDecoder;
 import io.netty.handler.codec.protobuf.ProtobufVarint32LengthFieldPrepender;
 
 import java.net.URI;
@@ -40,7 +36,7 @@ public class NettyClientTransport implements IClientTransport {
                     @Override
                     protected void initChannel(SocketChannel ch) {
                         ch.pipeline()
-                                .addLast("frameDecoder", new ProtobufVarint32FrameDecoder())
+                                .addLast("frameDecoder", new LimitedVarint32FrameDecoder())
                                 .addLast("frameEncoder", new ProtobufVarint32LengthFieldPrepender())
                                 .addLast("handler", new NettyClientHandler(listener));
                     }
