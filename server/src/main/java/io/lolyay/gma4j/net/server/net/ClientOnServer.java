@@ -50,7 +50,11 @@ public class ClientOnServer implements ServerConnectionListener, IPacketHandler 
         this.netServer = netServer;
         this.remoteId = remoteId;
         this.encryptionState = new ServerEncryptionState(netServer.getCertificateProvider(), netServer::getSupportedAuthTypes);
-        this.pipeline = new PacketPipeline(new PacketDistributorImpl(new ServerDefaultSystemPacketCallback(this), this, () -> authenticated));
+        this.pipeline = new PacketPipeline(
+                this::disconnect,
+                new PacketDistributorImpl(new ServerDefaultSystemPacketCallback(this),
+                        this, () -> authenticated)
+        );
     }
 
     @Override
@@ -70,12 +74,9 @@ public class ClientOnServer implements ServerConnectionListener, IPacketHandler 
         if(!connected) {
             return;
         }
-        connected = false;
         log.info("Dropping {} ({})", describe(), reason);
-        netServer.removeClient(this);
-        if(messageSender != null) {
-            messageSender.close();
-        }
+        close();
+
     }
 
     @Override
@@ -93,8 +94,7 @@ public class ClientOnServer implements ServerConnectionListener, IPacketHandler 
 
     @Override
     public void onConnectionClosed(String reason) {
-        connected = false;
-        netServer.removeClient(this);
+        close();
         netServer.getEventHandler().onClientDisconnected(this, reason);
     }
 
@@ -118,5 +118,17 @@ public class ClientOnServer implements ServerConnectionListener, IPacketHandler 
         if(helloPacket.clientType() == ClientType.GMA4J_JAVA && !Arrays.equals(helloPacket.codecHash(), netServer.getCodecRegistry().getConfig().globalCodecState()))
             return "Codec hash mismatch: Client: " + Arrays.toString(helloPacket.codecHash()) + " != Our: " + Arrays.toString(netServer.getCodecRegistry().getConfig().globalCodecState());
         return null;
+    }
+
+    private void close() {
+        connected = false;
+        if(messageSender != null) {
+            messageSender.close();
+        }
+        pipeline.close();
+
+        try {
+            netServer.removeClient(this);
+        } catch (Exception ignored) {}
     }
 }

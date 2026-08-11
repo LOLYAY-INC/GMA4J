@@ -21,6 +21,7 @@ import java.util.zip.DataFormatException;
 public class PacketPipeline {
     @Setter
     private PacketCryptor cryptor;
+    private final Runnable closeHook;
     private boolean isClosed = false;
     private final AtomicInteger sequence = new AtomicInteger(0);
     private final AtomicInteger remoteSequence = new AtomicInteger(0);
@@ -28,6 +29,7 @@ public class PacketPipeline {
     private final IPacketDistributor distributor;
 
     public <T extends GMAPacket<T>> byte[] encode(T packet) {
+        if(isClosed) throw new IllegalStateException("PacketPipeline is closed");
         byte[] encoded = encodePacket(packet);
         if(cryptor != null) {
             return cryptor.encrypt(encoded);
@@ -36,6 +38,7 @@ public class PacketPipeline {
     }
 
     public <T extends GMAPacket<T>> T decode(byte[] data) {
+        if(isClosed) throw new IllegalStateException("PacketPipeline is closed");
         if(cryptor != null) {
             data = cryptor.decrypt(data);
         }
@@ -43,20 +46,12 @@ public class PacketPipeline {
     }
 
     public <T extends GMAPacket<T>> void decodeAndPassDown(byte[] data) {
-        if(cryptor != null) {
-            data = cryptor.decrypt(data);
-        }
-        passDown(data);
+        if(isClosed) throw new IllegalStateException("PacketPipeline is closed");
+        T packet = decodePacket(data);
+        passDown(packet);
     }
 
-    public <T extends GMAPacket<T>> void passDown(byte[] data) {
-        T packet;
-        try {
-            packet = decodePacket(data);
-        } catch (PacketCodingException e) {
-            log.error("Error while decoding packet", e);
-            return;
-        }
+    private <T extends GMAPacket<T>> void passDown(T packet) {
         try {
             distributor.distribute(packet);
         } catch (Exception e) {
@@ -65,7 +60,7 @@ public class PacketPipeline {
     }
 
     private <T extends GMAPacket<T>> T decodePacket(byte[] data) throws PacketCodingException {
-        if(data.length < 4) throw new PacketCodingException("Packet too short");
+        if(data.length < 8) throw new PacketCodingException("Packet too short");
 
         int sequence = ByteReader.readInt(data, 0); // 0-3
 
@@ -73,7 +68,7 @@ public class PacketPipeline {
             log.error("Packet out of order: expected {}, got {}", this.remoteSequence.get(), sequence);
             if(outOfSequenceCount.incrementAndGet() >= SharedConfig.MAX_OUT_OF_ORDER) {
                 log.error("Too many out of order packets, closing connection");
-                close();
+                closeHook.run();
             }
             return null;
         } else
@@ -125,10 +120,7 @@ public class PacketPipeline {
             throw new PacketCodingException("Error encoding packet: " + packet.getPacketType().numericId(), e);
         }
 
-        byte[] encodingBuffer = new byte[payload.length + 4];
-        ByteWriter.writeInt(encodingBuffer, sequence.getAndIncrement(),0);
-        System.arraycopy(payload, 0, encodingBuffer, 4, payload.length);
-        payload = encodingBuffer;
+
 
         if(payload.length >= SharedConfig.PACKET_COMPRESSION_THRESHOLD) {
             int uncompressedLength = payload.length;
@@ -141,11 +133,12 @@ public class PacketPipeline {
             log.debug("Compressed outgoing packet {}: {} -> {} bytes", packetId, uncompressedLength, payload.length);
         }
 
-        byte[] encodedPacket = new byte[payload.length + 4];
-        encodedPacket[0] = (byte) (compressed ? 1 : 0);
-        encodedPacket[1] = (byte) codecType.ordinal();
-        encodedPacket[2] = (byte) (packetId >> 8);
-        encodedPacket[3] = (byte) packetId;
+        byte[] encodedPacket = new byte[payload.length + 8];
+        ByteWriter.writeInt(encodedPacket, sequence.getAndIncrement(),0);
+        encodedPacket[4] = (byte) (compressed ? 1 : 0);
+        encodedPacket[5] = (byte) codecType.ordinal();
+        encodedPacket[6] = (byte) (packetId >> 8);
+        encodedPacket[7] = (byte) packetId;
         System.arraycopy(payload, 0, encodedPacket, 4, payload.length);
 
         return encodedPacket;
@@ -153,5 +146,7 @@ public class PacketPipeline {
 
     public void close() {
         isClosed = true;
+        cryptor.close();
+        distributor.close();
     }
 }

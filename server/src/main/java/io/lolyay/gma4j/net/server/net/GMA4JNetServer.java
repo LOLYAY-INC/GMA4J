@@ -76,7 +76,7 @@ public class GMA4JNetServer implements ServerClientHandler {
 
     public UUID generateFreeUUID(String clientName) {
         UUID id = UUID.randomUUID();
-        while(clientsById.putIfAbsent(id, null) != null) {
+        while(clientsById.get(id) != null) {
             id = UUID.randomUUID();
         }
         return id;

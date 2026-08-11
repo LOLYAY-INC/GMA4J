@@ -1,5 +1,7 @@
 package io.lolyay.gma4j.net.codec.encryption;
 
+import lombok.SneakyThrows;
+
 import javax.crypto.Cipher;
 import javax.crypto.Mac;
 import javax.crypto.spec.GCMParameterSpec;
@@ -73,5 +75,11 @@ public class PacketCryptor {
         } catch (GeneralSecurityException e) {
             throw new IllegalStateException("Packet key derivation failed", e);
         }
+    }
+
+    @SneakyThrows
+    public void close() {
+        sendKey.destroy();
+        receiveKey.destroy();
     }
 }

@@ -1,10 +1,6 @@
 package io.lolyay.gma4j.codec;
 
-import io.lolyay.gma4j.codec.fixtures.BinaryPacket;
-import io.lolyay.gma4j.codec.fixtures.BlobPacket;
-import io.lolyay.gma4j.codec.fixtures.ComplexPacket;
-import io.lolyay.gma4j.codec.fixtures.LargeJsonPacket;
-import io.lolyay.gma4j.codec.fixtures.TinyPacket;
+import io.lolyay.gma4j.codec.fixtures.*;
 import io.lolyay.gma4j.net.codec.CodecRegistry;
 import io.lolyay.gma4j.net.codec.PacketCodingException;
 import io.lolyay.gma4j.net.codec.PacketPipeline;
@@ -43,7 +39,7 @@ class PacketPipelineTest {
         registry.addCodec(BlobPacket.TYPE);
         registry.addCodec(TinyPacket.TYPE);
         registry.warmup();
-        pipeline = new PacketPipeline(noopDistributor());
+        pipeline = new PacketPipeline(() -> {}, noopDistributor());
     }
 
     @Test
@@ -107,9 +103,9 @@ class PacketPipelineTest {
         for (int i = 0; i < key.length; i++) {
             key[i] = (byte) i;
         }
-        PacketPipeline client = new PacketPipeline(noopDistributor());
+        PacketPipeline client = new PacketPipeline(() -> {}, noopDistributor());
         client.setCryptor(new PacketCryptor(key, false));
-        PacketPipeline server = new PacketPipeline(noopDistributor());
+        PacketPipeline server = new PacketPipeline(() -> {}, noopDistributor());
         server.setCryptor(new PacketCryptor(key, true));
 
         BinaryPacket packet = new BinaryPacket(11, 22L, false, "encrypted", 33);
@@ -121,9 +117,9 @@ class PacketPipelineTest {
     @Test
     void tamperedCiphertextRejected() {
         byte[] key = new byte[32];
-        PacketPipeline client = new PacketPipeline(noopDistributor());
+        PacketPipeline client = new PacketPipeline(() -> {}, noopDistributor());
         client.setCryptor(new PacketCryptor(key, false));
-        PacketPipeline server = new PacketPipeline(noopDistributor());
+        PacketPipeline server = new PacketPipeline(() -> {}, noopDistributor());
         server.setCryptor(new PacketCryptor(key, true));
 
         byte[] wire = client.encode(new BinaryPacket(1, 1, true, "x", 1));
