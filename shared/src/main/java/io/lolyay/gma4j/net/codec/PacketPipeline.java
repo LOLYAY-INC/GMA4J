@@ -6,11 +6,14 @@ import io.lolyay.gma4j.net.codec.packet.PacketType;
 import io.lolyay.gma4j.net.codec.packetdistributer.IPacketDistributor;
 import io.lolyay.gma4j.net.shared.CodecType;
 import io.lolyay.gma4j.net.shared.SharedConfig;
+import io.lolyay.gma4j.net.util.ByteReader;
+import io.lolyay.gma4j.net.util.ByteWriter;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.Arrays;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.zip.DataFormatException;
 
 @Slf4j
@@ -19,6 +22,9 @@ public class PacketPipeline {
     @Setter
     private PacketCryptor cryptor;
     private boolean isClosed = false;
+    private final AtomicInteger sequence = new AtomicInteger(0);
+    private final AtomicInteger remoteSequence = new AtomicInteger(0);
+    private final AtomicInteger outOfSequenceCount = new AtomicInteger(0);
     private final IPacketDistributor distributor;
 
     public <T extends GMAPacket<T>> byte[] encode(T packet) {
@@ -61,10 +67,22 @@ public class PacketPipeline {
     private <T extends GMAPacket<T>> T decodePacket(byte[] data) throws PacketCodingException {
         if(data.length < 4) throw new PacketCodingException("Packet too short");
 
-        boolean compressed = (data[0] & 0x1) != 0; // 0
+        int sequence = ByteReader.readInt(data, 0); // 0-3
+
+        if(sequence != this.remoteSequence.getAndIncrement()) {
+            log.error("Packet out of order: expected {}, got {}", this.remoteSequence.get(), sequence);
+            if(outOfSequenceCount.incrementAndGet() >= SharedConfig.MAX_OUT_OF_ORDER) {
+                log.error("Too many out of order packets, closing connection");
+                close();
+            }
+            return null;
+        } else
+            outOfSequenceCount.set(0);
+
+        boolean compressed = (data[4] & 0x1) != 0; // 4
         //TODO: we currently waste 7 bits here; other compression algos?
-        int codecOrdinal = data[1] & 0xFF; // 1
-        int packetId = ((data[2] & 0xFF) << 8) | (data[3] & 0xFF); // 2, 3
+        int codecOrdinal = data[5] & 0xFF; // 5
+        int packetId = ((data[6] & 0xFF) << 8) | (data[7] & 0xFF); // 6, 7
 
 
         if(!CodecRegistry.getInstance().isValid(packetId)) throw new PacketCodingException("Invalid packet id: " + packetId);
@@ -76,7 +94,7 @@ public class PacketPipeline {
 
         if(packetType.codec().getCodecType() != codecType && SharedConfig.FORCE_CODEC) throw new PacketCodingException("Codec Not supported for packet: " + codecType);
 
-        byte[] packet = Arrays.copyOfRange(data, 4, data.length);
+        byte[] packet = Arrays.copyOfRange(data, 8, data.length); // 8-end
 
         if(compressed) {
             int compressedLength = packet.length;
@@ -106,6 +124,11 @@ public class PacketPipeline {
         } catch (Exception e) {
             throw new PacketCodingException("Error encoding packet: " + packet.getPacketType().numericId(), e);
         }
+
+        byte[] encodingBuffer = new byte[payload.length + 4];
+        ByteWriter.writeInt(encodingBuffer, sequence.getAndIncrement(),0);
+        System.arraycopy(payload, 0, encodingBuffer, 4, payload.length);
+        payload = encodingBuffer;
 
         if(payload.length >= SharedConfig.PACKET_COMPRESSION_THRESHOLD) {
             int uncompressedLength = payload.length;

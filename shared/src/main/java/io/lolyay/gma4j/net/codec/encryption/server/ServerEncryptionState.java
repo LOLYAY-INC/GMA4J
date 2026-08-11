@@ -10,6 +10,7 @@ import io.lolyay.gma4j.net.shared.SharedSecretDeriver;
 import lombok.Getter;
 import lombok.SneakyThrows;
 
+import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
@@ -56,11 +57,16 @@ public class ServerEncryptionState extends AbstractEncryptionState {
         GmaAuthType selectedAuthType = selectAuthType(clientSupportedAuthTypes);
 
         byte[] cert = certificateProvider.getCertificate();
+        byte[] clientSupportedAuthTypesHash = clientSupportedAuthTypes.stream()
+                .map(GmaAuthType::ordinal)
+                .collect(ByteArrayOutputStream::new, ByteArrayOutputStream::write, (a, b) -> a.writeBytes(b.toByteArray()))
+                .toByteArray();
 
         codecEncryptionStateHash.update(clientNonce); // remote nonce
         codecEncryptionStateHash.update(serverNonce); // own nonce
         codecEncryptionStateHash.update(clientDhParams); // remote dh
         codecEncryptionStateHash.update(dhState.publicKey()); // own dh
+        codecEncryptionStateHash.update(clientSupportedAuthTypesHash); // remote authtypes
         codecEncryptionStateHash.update(cert); // server cert
         codecEncryptionStateHash.update((byte) selectedEncryptionMode.ordinal()); // enc mode (ss)
         codecEncryptionStateHash.update((byte) selectedAuthType.ordinal()); // auth type (ss)

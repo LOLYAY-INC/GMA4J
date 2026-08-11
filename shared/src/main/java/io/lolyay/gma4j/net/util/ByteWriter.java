@@ -74,6 +74,13 @@ public final class ByteWriter {
         buf[len++] = (byte) value;
     }
 
+    public static void writeInt(byte[] buf, int value, int len) {
+        buf[len++] = (byte) (value >>> 24);
+        buf[len++] = (byte) (value >>> 16);
+        buf[len++] = (byte) (value >>> 8);
+        buf[len++] = (byte) value;
+    }
+
     public void writeLong(long value) {
         ensure(8);
         for (int shift = 56; shift >= 0; shift -= 8) {

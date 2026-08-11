@@ -11,6 +11,7 @@ import lombok.Getter;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 
+import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.*;
 import java.security.spec.X509EncodedKeySpec;
@@ -94,11 +95,16 @@ public class ClientEncryptionState extends AbstractEncryptionState {
             log.error("Verify the new fingerprint over a trusted out-of-band channel before trusting this host.");
             throw new IllegalStateException("Remote Host Identification changed");
         }
+        byte[] clientSupportedAuthTypesHash = clientSupportedAuthTypes.stream()
+                .map(GmaAuthType::ordinal)
+                .collect(ByteArrayOutputStream::new, ByteArrayOutputStream::write, (a, b) -> a.writeBytes(b.toByteArray()))
+                .toByteArray();
 
         codecEncryptionStateHash.update(clientNonce); // own nonce
         codecEncryptionStateHash.update(serverNonce); // remote nonce
         codecEncryptionStateHash.update(dhState.publicKey()); // own dh
         codecEncryptionStateHash.update(dhParams); // remote dh
+        codecEncryptionStateHash.update(clientSupportedAuthTypesHash); // own authtypes
         codecEncryptionStateHash.update(cert); // server cert
         codecEncryptionStateHash.update((byte) selectedEncryptionMode.ordinal()); // enc mode (ss)
         codecEncryptionStateHash.update((byte) selectedAuthType.ordinal()); // auth type (ss)
