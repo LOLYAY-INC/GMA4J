@@ -76,6 +76,14 @@ public class ClientOnServer implements ServerConnectionListener, IPacketHandler 
         }
         log.info("Dropping {} ({})", describe(), reason);
         close();
+    }
+
+    public void disconnect() {
+        if(!connected) {
+            return;
+        }
+        log.info("Dropping {}.", describe());
+        close();
 
     }
 

@@ -41,6 +41,14 @@ public class PacketPipeline {
 
     public <T extends GMAPacket<T>> void decodeAndPassDown(byte[] data) {
         T packet = decode(data);
+
+        if(packet == null) {
+            if(SharedConfig.DEBUG)
+                log.warn("Dropped Packet: (len:{})", data.length);
+
+            return;
+        }
+
         try {
             distributor.distribute(packet);
         } catch (Exception e) {
@@ -64,6 +72,7 @@ public class PacketPipeline {
         int sequence = ByteReader.readInt(data, 0); // 0-3
 
         if(sequence != this.remoteSequence.getAndIncrement()) {
+            remoteSequence.decrementAndGet();
             log.error("Packet out of order: expected {}, got {}", this.remoteSequence.get(), sequence);
             if(outOfSequenceCount.incrementAndGet() >= SharedConfig.MAX_OUT_OF_ORDER) {
                 log.error("Too many out of order packets, closing connection");
@@ -151,14 +160,26 @@ public class PacketPipeline {
         encodedPacket[5] = (byte) codecType.ordinal();
         encodedPacket[6] = (byte) (packetId >> 8);
         encodedPacket[7] = (byte) packetId;
-        System.arraycopy(payload, 0, encodedPacket, 4, payload.length);
+        System.arraycopy(payload, 0, encodedPacket, 8, payload.length);
 
         return encodedPacket;
     }
 
     public void close() {
+        if(isClosed) return;
         isClosed = true;
-        cryptor.close();
-        distributor.close();
+        try {
+            distributor.close();
+        } catch (Exception e) {
+            log.error("Error while closing distributor", e);
+        }
+
+        if(cryptor != null) {
+            try {
+                cryptor.close();
+            } catch (Exception e) {
+                log.error("Error while closing cryptor", e);
+            }
+        }
     }
 }

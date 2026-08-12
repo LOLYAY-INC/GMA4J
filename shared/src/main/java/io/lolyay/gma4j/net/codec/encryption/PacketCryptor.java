@@ -1,6 +1,6 @@
 package io.lolyay.gma4j.net.codec.encryption;
 
-import lombok.SneakyThrows;
+import lombok.extern.slf4j.Slf4j;
 
 import javax.crypto.Cipher;
 import javax.crypto.Mac;
@@ -11,6 +11,7 @@ import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
 import java.util.Arrays;
 
+@Slf4j
 public class PacketCryptor {
 
     private static final String CIPHER = "AES/GCM/NoPadding";
@@ -77,9 +78,6 @@ public class PacketCryptor {
         }
     }
 
-    @SneakyThrows
     public void close() {
-        sendKey.destroy();
-        receiveKey.destroy();
     }
 }
