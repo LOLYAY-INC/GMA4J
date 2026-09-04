@@ -1,5 +1,6 @@
 package io.lolyay.gma4j.net.codec.auth.server;
 
+import io.lolyay.gma4j.net.codec.auth.AuthTimestampValidator;
 import io.lolyay.gma4j.net.codec.auth.GmaAuthType;
 import io.lolyay.gma4j.net.util.LongUtil;
 import lombok.extern.slf4j.Slf4j;
@@ -11,7 +12,6 @@ import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.util.UUID;
 
-import static io.lolyay.gma4j.net.codec.auth.AuthTimestampValidator.isWithinAllowedSkew;
 
 @Slf4j
 public class GmaApiHmacAuthServer implements GmaAuthServer {
@@ -51,7 +51,7 @@ public class GmaApiHmacAuthServer implements GmaAuthServer {
         byte[] tag = new byte[response.length - 8];
         System.arraycopy(response, 8, tag, 0, tag.length);
 
-        if (!isWithinAllowedSkew(ts, System.currentTimeMillis())) {
+        if (!AuthTimestampValidator.isWithinAllowedSkew(ts, System.currentTimeMillis())) {
             return false;
         }
 

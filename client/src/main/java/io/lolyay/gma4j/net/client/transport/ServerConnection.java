@@ -25,10 +25,10 @@ public class ServerConnection implements ClientConnectionListener { // client ha
     private final String clientClaimedStringId;
     private final String uri;
 
-    private MessageSender messageSender;
+    private volatile MessageSender messageSender;
 
     @Getter
-    private boolean isConnected = false;
+    private volatile boolean isConnected = false;
 
     public synchronized <T extends GMAPacket<T>> void send(T data) {
         if(messageSender == null || !isConnected) {

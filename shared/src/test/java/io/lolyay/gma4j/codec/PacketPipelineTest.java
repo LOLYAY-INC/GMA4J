@@ -248,6 +248,19 @@ class PacketPipelineTest {
         assertEquals(1, closes.get());
         assertThrows(IllegalStateException.class, () -> pipeline.encode(new TinyPacket(1)));
         assertThrows(IllegalStateException.class, () -> pipeline.decode(new byte[8]));
+        assertDoesNotThrow(() -> pipeline.decodeAndPassDown(new byte[8]));
+    }
+
+    @Test
+    void protocolCloseHookFailureStillClosesPipeline() {
+        PacketPipeline pipeline = new PacketPipeline(() -> {
+            throw new IllegalStateException("close failed");
+        }, noopDistributor());
+        for (int i = 1; i < SharedConfig.MAX_OUT_OF_ORDER; i++) {
+            assertNull(pipeline.decode(header(1, 0, 0)));
+        }
+        assertThrows(IllegalStateException.class, () -> pipeline.decode(header(1, 0, 0)));
+        assertThrows(IllegalStateException.class, () -> pipeline.encode(new TinyPacket(1)));
     }
 
     @Test

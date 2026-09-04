@@ -29,8 +29,8 @@ public class ClientOnServer implements ServerConnectionListener, IPacketHandler 
     private final PacketPipeline pipeline;
 
     @Getter(AccessLevel.NONE)
-    private MessageSender messageSender;
-    private boolean connected = false;
+    private volatile MessageSender messageSender;
+    private volatile boolean connected = false;
 
     @Getter
     @Setter
