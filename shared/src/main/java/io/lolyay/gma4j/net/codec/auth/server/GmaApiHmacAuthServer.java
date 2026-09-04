@@ -11,7 +11,7 @@ import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.util.UUID;
 
-import static io.lolyay.gma4j.net.shared.SharedConfig.ALLOWED_CLOCK_SKEW_MS;
+import static io.lolyay.gma4j.net.codec.auth.AuthTimestampValidator.isWithinAllowedSkew;
 
 @Slf4j
 public class GmaApiHmacAuthServer implements GmaAuthServer {
@@ -51,8 +51,7 @@ public class GmaApiHmacAuthServer implements GmaAuthServer {
         byte[] tag = new byte[response.length - 8];
         System.arraycopy(response, 8, tag, 0, tag.length);
 
-        long now = System.currentTimeMillis();
-        if (Math.abs(now - ts) > ALLOWED_CLOCK_SKEW_MS) {
+        if (!isWithinAllowedSkew(ts, System.currentTimeMillis())) {
             return false;
         }
 

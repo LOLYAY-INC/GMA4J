@@ -13,7 +13,7 @@ import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
 import java.util.UUID;
 
-import static io.lolyay.gma4j.net.shared.SharedConfig.ALLOWED_CLOCK_SKEW_MS;
+import static io.lolyay.gma4j.net.codec.auth.AuthTimestampValidator.isWithinAllowedSkew;
 
 @Slf4j
 public class GmaApiECCAuthServer implements GmaAuthServer {
@@ -72,8 +72,7 @@ public class GmaApiECCAuthServer implements GmaAuthServer {
         byte[] signature = new byte[response.length - 8];
         System.arraycopy(response, 8, signature, 0, signature.length);
 
-        long now = System.currentTimeMillis();
-        if (Math.abs(now - ts) > ALLOWED_CLOCK_SKEW_MS) {
+        if (!isWithinAllowedSkew(ts, System.currentTimeMillis())) {
             return false;
         }
 

@@ -62,7 +62,7 @@ public class ClientOnServer implements ServerConnectionListener, IPacketHandler 
         return netServer.getEventHandler().handle(this, packet);
     }
 
-    public <T extends GMAPacket<T>> void send(T packet) {
+    public synchronized <T extends GMAPacket<T>> void send(T packet) {
         if(messageSender == null || !connected) {
             log.warn("Cannot send packet to {}, connection is not established", describe());
             return;

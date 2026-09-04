@@ -1,5 +1,6 @@
 package io.lolyay.gma4j.net.server.transport.ws;
 
+import io.lolyay.gma4j.net.codec.PacketCodingException;
 import io.lolyay.gma4j.net.codec.connection.server.ServerClientHandler;
 import io.lolyay.gma4j.net.codec.connection.server.ServerConnectionListener;
 import io.lolyay.gma4j.net.shared.SharedConfig;
@@ -9,6 +10,7 @@ import org.java_websocket.WebSocket;
 import org.java_websocket.drafts.Draft;
 import org.java_websocket.drafts.Draft_6455;
 import org.java_websocket.exceptions.InvalidDataException;
+import org.java_websocket.framing.CloseFrame;
 import org.java_websocket.handshake.ClientHandshake;
 import org.java_websocket.handshake.ServerHandshakeBuilder;
 import org.java_websocket.protocols.Protocol;
@@ -20,11 +22,14 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 import static io.lolyay.gma4j.net.transport.TransportConstants.*;
 
 public class WsServerTransport implements IServerTransport {
 
+    private final CompletableFuture<Void> started = new CompletableFuture<>();
     private final WebSocketServer server;
 
     public WsServerTransport(ServerTransportData data, ServerClientHandler clientHandler) {
@@ -57,7 +62,14 @@ public class WsServerTransport implements IServerTransport {
             @Override
             public void onMessage(WebSocket conn, ByteBuffer message) {
                 if (message.remaining() > SharedConfig.MAX_PACKET_SIZE) {
-                    throw new IllegalArgumentException("Packet too large; Size: %s, max: %s".formatted(message.remaining(), SharedConfig.MAX_PACKET_SIZE));
+                    PacketCodingException error = new PacketCodingException(
+                            "Packet too large: " + message.remaining() + " > " + SharedConfig.MAX_PACKET_SIZE);
+                    ServerConnectionListener listener = conn.getAttachment();
+                    if (listener != null) {
+                        listener.onConnectionError(error);
+                    }
+                    conn.close(CloseFrame.TOOBIG, "Packet too large");
+                    return;
                 }
 
                 ServerConnectionListener listener = conn.getAttachment();
@@ -71,6 +83,7 @@ public class WsServerTransport implements IServerTransport {
             @Override
             public void onError(WebSocket conn, Exception ex) {
                 if (conn == null) {
+                    started.completeExceptionally(ex);
                     return;
                 }
                 ServerConnectionListener listener = conn.getAttachment();
@@ -81,6 +94,7 @@ public class WsServerTransport implements IServerTransport {
 
             @Override
             public void onStart() {
+                started.complete(null);
             }
 
             @Override
@@ -97,6 +111,16 @@ public class WsServerTransport implements IServerTransport {
     @Override
     public void start() {
         server.start();
+        try {
+            started.get(10, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            stopAfterFailedStart();
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Interrupted while starting WebSocket server", e);
+        } catch (Exception e) {
+            stopAfterFailedStart();
+            throw new IllegalStateException("Failed to start WebSocket server", e);
+        }
     }
 
     @Override
@@ -106,6 +130,14 @@ public class WsServerTransport implements IServerTransport {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("Interrupted while stopping WebSocket server", e);
+        }
+    }
+
+    private void stopAfterFailedStart() {
+        try {
+            server.stop(1_000);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
     }
 

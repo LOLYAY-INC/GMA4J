@@ -16,7 +16,7 @@ public class LimitedVarint32FrameDecoder extends ProtobufVarint32FrameDecoder  {
         int preIndex = in.readerIndex();
         int length = readRawVarint32(in);
 
-        if(length >= SharedConfig.MAX_PACKET_SIZE) {
+        if(length > SharedConfig.MAX_PACKET_SIZE) {
             throw new PacketCodingException("Packet too large; Size: %s, max: %s".formatted(length, SharedConfig.MAX_PACKET_SIZE));
         }
 

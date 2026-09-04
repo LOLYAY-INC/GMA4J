@@ -6,6 +6,7 @@ import io.lolyay.gma4j.net.shared.SharedConfig;
 import io.lolyay.gma4j.net.transport.IClientTransport;
 import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.drafts.Draft_6455;
+import org.java_websocket.framing.CloseFrame;
 import org.java_websocket.handshake.ServerHandshake;
 import org.java_websocket.protocols.Protocol;
 
@@ -44,7 +45,11 @@ public class WsClientTransport implements IClientTransport {
             @Override
             public void onMessage(ByteBuffer bytes) {
                 if(bytes.remaining() > SharedConfig.MAX_PACKET_SIZE) {
-                    throw new PacketCodingException("Packet too large; Size: %s, max: %s".formatted(bytes.remaining(), SharedConfig.MAX_PACKET_SIZE));
+                    PacketCodingException error = new PacketCodingException(
+                            "Packet too large: " + bytes.remaining() + " > " + SharedConfig.MAX_PACKET_SIZE);
+                    listener.onConnectionError(error);
+                    close(CloseFrame.TOOBIG, "Packet too large");
+                    return;
                 }
 
                 byte[] data = new byte[bytes.remaining()];
