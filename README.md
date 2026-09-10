@@ -3,6 +3,7 @@
 Secure, transport-agnostic messaging for Java (with JS and Python clients planned). 
 
 GMA4J gives you auth, end-to-end encryption, with pluggable transports (WebSocket or raw TCP(Netty)), all in one **modular** library.
+> The main goal for this Project is to be **modular** so if you do not find a feature you need, most of the time you can just implement it yourself, or just create a github issue / pr!
 
 ## What you get
 

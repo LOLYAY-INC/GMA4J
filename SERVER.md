@@ -86,6 +86,7 @@ GmaApiHmacAuthServer hmacAuth = new GmaApiHmacAuthServer("super-secret-key");
 | `GmaApiKeyAuthServer(apiKey)` | API key (**DEPRECATED**), Use HMAC | `ClientAuth.apiKey(...)` |
 | `GmaApiHmacAuthServer`        | HMAC-SHA256                        | `ClientAuth.hmac(...)`   |
 | `GmaApiECCAuthServer`         | ECDSA                              | `ClientAuth.ecc(...)`    |
+| `GmaMultiClientECCAuthServer` | ECDSA (One Key for each Client ID) | `ClientAuth.ecc(...)`    |
 
 ## 4. Bind and start
 

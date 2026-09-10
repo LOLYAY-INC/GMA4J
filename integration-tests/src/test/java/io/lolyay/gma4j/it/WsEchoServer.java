@@ -2,6 +2,7 @@ package io.lolyay.gma4j.it;
 
 import io.lolyay.gma4j.net.codec.CodecRegistry;
 import io.lolyay.gma4j.net.codec.auth.server.GmaApiECCAuthServer;
+import io.lolyay.gma4j.net.codec.auth.server.GmaApiHmacAuthServer;
 import io.lolyay.gma4j.net.codec.encryption.server.IServerCertificateProvider;
 import io.lolyay.gma4j.net.codec.packet.GMAPacket;
 import io.lolyay.gma4j.net.server.GMA4JServer;
@@ -64,7 +65,7 @@ public class WsEchoServer {
 
         GMA4JServer server = new GMA4JServer(handler, certProvider);
         server.start(new ServerBindInfo("127.0.0.1", 9000, "ws",
-                new GmaApiECCAuthServer((ECPublicKey) clientAuthKey.getPublic())));
+                new GmaApiECCAuthServer((ECPublicKey) clientAuthKey.getPublic()), new GmaApiHmacAuthServer("my-hmac-secret")));
 
         System.out.println("==================================================================");
         System.out.println("GMA4J echo server on ws://127.0.0.1:9000  (ECDSA auth, ComplexPacket)");
