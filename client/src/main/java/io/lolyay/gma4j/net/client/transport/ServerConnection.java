@@ -25,12 +25,12 @@ public class ServerConnection implements ClientConnectionListener { // client ha
     private final String clientClaimedStringId;
     private final String uri;
 
-    private MessageSender messageSender;
+    private volatile MessageSender messageSender;
 
     @Getter
-    private boolean isConnected = false;
+    private volatile boolean isConnected = false;
 
-    public <T extends GMAPacket<T>> void send(T data) {
+    public synchronized <T extends GMAPacket<T>> void send(T data) {
         if(messageSender == null || !isConnected) {
             log.warn("Cannot send packet, connection is not established");
             return;

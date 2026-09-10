@@ -29,8 +29,8 @@ public class ClientOnServer implements ServerConnectionListener, IPacketHandler 
     private final PacketPipeline pipeline;
 
     @Getter(AccessLevel.NONE)
-    private MessageSender messageSender;
-    private boolean connected = false;
+    private volatile MessageSender messageSender;
+    private volatile boolean connected = false;
 
     @Getter
     @Setter
@@ -50,7 +50,11 @@ public class ClientOnServer implements ServerConnectionListener, IPacketHandler 
         this.netServer = netServer;
         this.remoteId = remoteId;
         this.encryptionState = new ServerEncryptionState(netServer.getCertificateProvider(), netServer::getSupportedAuthTypes);
-        this.pipeline = new PacketPipeline(new PacketDistributorImpl(new ServerDefaultSystemPacketCallback(this), this, () -> authenticated));
+        this.pipeline = new PacketPipeline(
+                this::disconnect,
+                new PacketDistributorImpl(new ServerDefaultSystemPacketCallback(this),
+                        this, () -> authenticated)
+        );
     }
 
     @Override
@@ -58,7 +62,7 @@ public class ClientOnServer implements ServerConnectionListener, IPacketHandler 
         return netServer.getEventHandler().handle(this, packet);
     }
 
-    public <T extends GMAPacket<T>> void send(T packet) {
+    public synchronized <T extends GMAPacket<T>> void send(T packet) {
         if(messageSender == null || !connected) {
             log.warn("Cannot send packet to {}, connection is not established", describe());
             return;
@@ -70,12 +74,17 @@ public class ClientOnServer implements ServerConnectionListener, IPacketHandler 
         if(!connected) {
             return;
         }
-        connected = false;
         log.info("Dropping {} ({})", describe(), reason);
-        netServer.removeClient(this);
-        if(messageSender != null) {
-            messageSender.close();
+        close();
+    }
+
+    public void disconnect() {
+        if(!connected) {
+            return;
         }
+        log.info("Dropping {}.", describe());
+        close();
+
     }
 
     @Override
@@ -93,8 +102,7 @@ public class ClientOnServer implements ServerConnectionListener, IPacketHandler 
 
     @Override
     public void onConnectionClosed(String reason) {
-        connected = false;
-        netServer.removeClient(this);
+        close();
         netServer.getEventHandler().onClientDisconnected(this, reason);
     }
 
@@ -118,5 +126,17 @@ public class ClientOnServer implements ServerConnectionListener, IPacketHandler 
         if(helloPacket.clientType() == ClientType.GMA4J_JAVA && !Arrays.equals(helloPacket.codecHash(), netServer.getCodecRegistry().getConfig().globalCodecState()))
             return "Codec hash mismatch: Client: " + Arrays.toString(helloPacket.codecHash()) + " != Our: " + Arrays.toString(netServer.getCodecRegistry().getConfig().globalCodecState());
         return null;
+    }
+
+    private void close() {
+        connected = false;
+        if(messageSender != null) {
+            messageSender.close();
+        }
+        pipeline.close();
+
+        try {
+            netServer.removeClient(this);
+        } catch (Exception ignored) {}
     }
 }

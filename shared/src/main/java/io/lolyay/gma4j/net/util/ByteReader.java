@@ -76,6 +76,14 @@ public final class ByteReader {
                 | (readByte() & 0xFF);
     }
 
+
+    public static int readInt(byte[] buf, int offset) {
+        return    ((buf[offset]     & 0xFF) << 24)
+                | ((buf[offset + 1] & 0xFF) << 16)
+                | ((buf[offset + 2] & 0xFF) << 8)
+                |  (buf[offset + 3] & 0xFF);
+    }
+
     public long readLong() {
         long v = 0;
         for (int i = 0; i < 8; i++) {

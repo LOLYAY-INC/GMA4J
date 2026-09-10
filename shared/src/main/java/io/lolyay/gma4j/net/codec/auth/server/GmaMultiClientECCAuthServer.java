@@ -3,6 +3,7 @@ package io.lolyay.gma4j.net.codec.auth.server;
 import io.lolyay.gma4j.net.codec.auth.AuthTimestampValidator;
 import io.lolyay.gma4j.net.codec.auth.GmaAuthType;
 import io.lolyay.gma4j.net.util.LongUtil;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 import java.nio.charset.StandardCharsets;
@@ -12,24 +13,38 @@ import java.security.Signature;
 import java.security.interfaces.ECPublicKey;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 
 @Slf4j
-public class GmaApiECCAuthServer implements GmaAuthServer {
-    private final ECPublicKey ecpublicKey;
+public class GmaMultiClientECCAuthServer implements GmaAuthServer {
+    @Getter
+    private final Map<String, ECPublicKey> publicKeys = new ConcurrentHashMap<>();
     private final static SecureRandom random = new SecureRandom();
 
-    public GmaApiECCAuthServer(ECPublicKey ecpublicKey) {
-        this.ecpublicKey = ecpublicKey;
+    public GmaMultiClientECCAuthServer(Map<String, ECPublicKey> ecpublicKey) {
+        this.publicKeys.putAll(ecpublicKey);
     }
 
-    public GmaApiECCAuthServer(String publicKey) {
-        this(importPublicKey(publicKey));
+    public boolean isKeyAvailable(String clientId) {
+        return publicKeys.containsKey(clientId);
     }
 
+    public ECPublicKey addKey(String clientId, String publicKey) {
+        return publicKeys.put(clientId, importPublicKey(publicKey));
+    }
 
-    private static ECPublicKey importPublicKey(String publicKey) {
+    public ECPublicKey removeKey(String clientId) {
+        return publicKeys.remove(clientId);
+    }
+
+    public ECPublicKey getPublicKey(String clientId) {
+        return publicKeys.get(clientId);
+    }
+
+    public static ECPublicKey importPublicKey(String publicKey) {
         try {
             String cleaned = publicKey
                     .replace("-----BEGIN PUBLIC KEY-----", "")
@@ -73,6 +88,12 @@ public class GmaApiECCAuthServer implements GmaAuthServer {
         System.arraycopy(response, 8, signature, 0, signature.length);
 
         if (!AuthTimestampValidator.isWithinAllowedSkew(ts, System.currentTimeMillis())) {
+            return false;
+        }
+
+        ECPublicKey ecpublicKey = publicKeys.get(claimedClientId);
+
+        if(ecpublicKey == null) {
             return false;
         }
 

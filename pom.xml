@@ -6,7 +6,7 @@
 
     <groupId>io.lolyay.gma4j</groupId>
     <artifactId>gma4j-parent</artifactId>
-    <version>3.14.60</version>
+    <version>3.15.1</version>
     <packaging>pom</packaging>
 
     <name>GMA4J Parent</name>
@@ -30,8 +30,7 @@
     </distributionManagement>
 
     <properties>
-        <maven.compiler.source>21</maven.compiler.source>
-        <maven.compiler.target>21</maven.compiler.target>
+        <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
         <jetty.version>11.0.17</jetty.version>
@@ -154,6 +153,11 @@
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <version>3.5.4</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-source-plugin</artifactId>
                     <version>3.3.0</version>
                     <executions>
@@ -186,6 +190,9 @@
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-deploy-plugin</artifactId>
                     <version>3.1.1</version>
+                    <configuration>
+                        <deployAtEnd>true</deployAtEnd>
+                    </configuration>
                 </plugin>
             </plugins>
         </pluginManagement>

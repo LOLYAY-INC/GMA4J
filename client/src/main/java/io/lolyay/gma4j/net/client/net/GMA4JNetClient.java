@@ -67,6 +67,7 @@ public class GMA4JNetClient {
             return thread;
         });
         this.pipeline = new PacketPipeline(
+                this::disconnect,
                 new PacketDistributorImpl(
                         new ClientDefaultSystemPacketCallback(this),
                         packetHandler,() -> authenticated)

@@ -13,11 +13,13 @@ import io.lolyay.gma4j.net.transport.IServerTransport;
 import io.lolyay.gma4j.net.transport.IServerTransportFactory;
 import io.lolyay.gma4j.net.transport.ServerTransportData;
 import io.lolyay.gma4j.net.transport.TransportManager;
+import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -32,7 +34,9 @@ public class GMA4JNetServer implements ServerClientHandler {
     private final Map<GmaAuthType, GmaAuthServer> authServers;
     private final CodecRegistry codecRegistry;
 
+    @Getter(AccessLevel.NONE)
     private final Map<UUID, ClientOnServer> clientsById = new ConcurrentHashMap<>();
+    @Getter(AccessLevel.NONE)
     private final Map<String, ClientOnServer> clientsByClaimedId = new ConcurrentHashMap<>();
 
     private IServerTransport transport;
@@ -65,24 +69,42 @@ public class GMA4JNetServer implements ServerClientHandler {
         return authServers.get(type);
     }
 
-    public UUID registerClient(ClientOnServer client, String claimedClientId) {
-        if(clientsByClaimedId.putIfAbsent(claimedClientId, client) != null) {
+    public synchronized UUID registerClient(ClientOnServer client) {
+        String claimedClientId = client.getClaimedClientId();
+        UUID assignedId = client.getAssignedId();
+        if (clientsByClaimedId.putIfAbsent(claimedClientId, client) != null) {
             return null;
         }
-        UUID id;
-        do {
+        if (clientsById.putIfAbsent(assignedId, client) != null) {
+            clientsByClaimedId.remove(claimedClientId, client);
+            return null;
+        }
+        return assignedId;
+    }
+
+    public UUID generateFreeUUID(String clientName) {
+        UUID id = UUID.randomUUID();
+        while(clientsById.get(id) != null) {
             id = UUID.randomUUID();
-        } while(clientsById.putIfAbsent(id, client) != null);
+        }
         return id;
     }
 
-    public void removeClient(ClientOnServer client) {
+    public synchronized void removeClient(ClientOnServer client) {
         if(client.getAssignedId() != null) {
             clientsById.remove(client.getAssignedId(), client);
         }
         if(client.getClaimedClientId() != null) {
             clientsByClaimedId.remove(client.getClaimedClientId(), client);
         }
+    }
+
+    public Map<UUID, ClientOnServer> getClientsById() {
+        return Collections.unmodifiableMap(clientsById);
+    }
+
+    public Map<String, ClientOnServer> getClientsByClaimedId() {
+        return Collections.unmodifiableMap(clientsByClaimedId);
     }
 
     public ClientOnServer getClient(UUID id) {
