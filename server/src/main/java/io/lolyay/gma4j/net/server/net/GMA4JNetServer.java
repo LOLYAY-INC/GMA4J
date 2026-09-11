@@ -29,6 +29,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 
 @Slf4j
 @Getter
@@ -46,6 +47,8 @@ public class GMA4JNetServer implements ServerClientHandler {
     private final Set<ClientOnServer> connections = ConcurrentHashMap.newKeySet();
     @Getter(AccessLevel.NONE)
     private final Object lifecycleMonitor = new Object();
+    @Getter(AccessLevel.NONE)
+    private final AtomicLong bigSizeBudgetUsed = new AtomicLong();
 
     @Getter(AccessLevel.NONE)
     private ScheduledExecutorService handshakeScheduler;
@@ -199,6 +202,20 @@ public class GMA4JNetServer implements ServerClientHandler {
         }
     }
 
+    /** Takes as much of wanted as the global budget still holds */
+    public long reserveBigSizeBudget(long wanted) {
+        while (true) {
+            long used = bigSizeBudgetUsed.get();
+            long take = Math.min(wanted, Math.max(0, SharedConfig.BIG_SIZE_TOTAL_BUDGET - used));
+            if (take <= 0) {
+                return 0;
+            }
+            if (bigSizeBudgetUsed.compareAndSet(used, used + take)) {
+                return take;
+            }
+        }
+    }
+
     private static ScheduledExecutorService createHandshakeScheduler() {
         ScheduledThreadPoolExecutor scheduler = new ScheduledThreadPoolExecutor(1, runnable -> {
             Thread thread = new Thread(runnable, "gma4j-server-handshake-deadline");
@@ -208,5 +225,9 @@ public class GMA4JNetServer implements ServerClientHandler {
         scheduler.setRemoveOnCancelPolicy(true);
         scheduler.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
         return scheduler;
+    }
+
+    public void releaseBigSizeBudget(long amount) {
+        bigSizeBudgetUsed.addAndGet(-amount);
     }
 }

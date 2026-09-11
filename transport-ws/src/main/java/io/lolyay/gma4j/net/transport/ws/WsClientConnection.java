@@ -17,19 +17,25 @@ public class WsClientConnection implements MessageSender {
     private final WebSocketClient client;
     private final WebSocketImpl connection;
     private final WebSocketOutboundBudget outboundBudget;
+    private final int frameCap;
 
     public WsClientConnection(WebSocketClient client) {
+        this(client, SharedConfig.MAX_PACKET_SIZE);
+    }
+
+    public WsClientConnection(WebSocketClient client, int frameCap) {
         this.client = Objects.requireNonNull(client, "client");
         WebSocket webSocket = client.getConnection();
         if (!(webSocket instanceof WebSocketImpl webSocketConnection)) {
             throw new IllegalArgumentException("Java-WebSocket 1.6 WebSocketImpl is required");
         }
         this.connection = webSocketConnection;
+        this.frameCap = frameCap;
         this.outboundBudget = new WebSocketOutboundBudget(
                 webSocketConnection.outQueue,
                 SharedConfig.MAX_PENDING_OUTBOUND_BYTES,
                 SharedConfig.MAX_PENDING_OUTBOUND_PACKETS,
-                SharedConfig.MAX_PACKET_SIZE,
+                frameCap,
                 true);
     }
 
@@ -48,6 +54,12 @@ public class WsClientConnection implements MessageSender {
             failClose();
             return false;
         }
+    }
+
+    @Override
+    public int maxSupportedFrameSize() {
+        // Draft frame cap is fixed at construction, so big size cannot grow past it
+        return frameCap;
     }
 
     @Override

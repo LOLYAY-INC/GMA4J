@@ -4,11 +4,17 @@ import io.lolyay.gma4j.net.shared.SharedConfig;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandler;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.embedded.EmbeddedChannel;
 import io.netty.handler.codec.DecoderException;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
+import java.util.function.IntSupplier;
 import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -53,6 +59,41 @@ class NettyFrameLimitTest {
                 if (frame.refCnt() > 0) {
                     frame.release();
                 }
+                channel.finishAndReleaseAll();
+            }
+        }
+    }
+
+    /** A status frame raising the limit must cover a big frame in the same read */
+    @Test
+    void limitRaisedByEarlierFrameAppliesWithinSameRead() {
+        List<Function<IntSupplier, ChannelHandler>> dynamicDecoders = List.of(
+                io.lolyay.gma4j.net.server.transport.netty.LimitedVarint32FrameDecoder::new,
+                io.lolyay.gma4j.net.transport.netty.coder.LimitedVarint32FrameDecoder::new);
+
+        for (Function<IntSupplier, ChannelHandler> decoder : dynamicDecoders) {
+            AtomicInteger limit = new AtomicInteger(64);
+            List<Integer> seen = new ArrayList<>();
+            EmbeddedChannel channel = new EmbeddedChannel(
+                    decoder.apply(limit::get),
+                    new ChannelInboundHandlerAdapter() {
+                        @Override
+                        public void channelRead(ChannelHandlerContext ctx, Object msg) {
+                            ByteBuf buf = (ByteBuf) msg;
+                            seen.add(buf.readableBytes());
+                            buf.release();
+                            limit.set(1024);
+                        }
+                    });
+            try {
+                ByteBuf read = Unpooled.buffer();
+                writeVarInt(read, 16);
+                read.writeZero(16);
+                writeVarInt(read, 512);
+                read.writeZero(512);
+                channel.writeInbound(read);
+                assertEquals(List.of(16, 512), seen);
+            } finally {
                 channel.finishAndReleaseAll();
             }
         }

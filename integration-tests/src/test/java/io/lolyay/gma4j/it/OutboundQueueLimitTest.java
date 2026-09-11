@@ -87,6 +87,31 @@ class OutboundQueueLimitTest {
     }
 
     @Test
+    void coalescedAndUrgentWritesShareTheSameLimit() {
+        SharedConfig.MAX_PENDING_OUTBOUND_BYTES = 4;
+        SharedConfig.MAX_PENDING_OUTBOUND_PACKETS = 2;
+        for (Function<Channel, MessageSender> factory : nettyConnections()) {
+            for (boolean urgent : new boolean[]{false, true}) {
+                HoldingOutboundHandler handler = new HoldingOutboundHandler();
+                EmbeddedChannel channel = new EmbeddedChannel(handler);
+                try {
+                    MessageSender sender = factory.apply(channel);
+                    sender.applyModes(false, true);
+                    assertTrue(sender.send(new byte[1], urgent));
+                    assertTrue(sender.send(new byte[1], urgent));
+                    channel.runPendingTasks();
+                    assertEquals(2, handler.size());
+                    assertFalse(sender.send(new byte[1], urgent));
+                    assertFalse(channel.isActive());
+                } finally {
+                    handler.releaseAll();
+                    channel.finishAndReleaseAll();
+                }
+            }
+        }
+    }
+
+    @Test
     void nettyConnectionsReleaseCompletedReservations() {
         SharedConfig.MAX_PENDING_OUTBOUND_BYTES = 2;
         SharedConfig.MAX_PENDING_OUTBOUND_PACKETS = 1;
@@ -256,7 +281,7 @@ class OutboundQueueLimitTest {
     private static ServerConnection connectedClient(MessageSender sender,
                                                      IConnectionStateCallback stateCallback) throws Exception {
         PacketPipeline pipeline = new PacketPipeline(() -> {}, new NoopPacketDistributor());
-        ServerConnection connection = new ServerConnection(null, pipeline, stateCallback, "client", "test://server");
+        ServerConnection connection = new ServerConnection(null, pipeline, pipeline.getSettings(), stateCallback, "client", "test://server");
         setField(connection, "messageSender", sender);
         setField(connection, "isConnected", true);
         return connection;

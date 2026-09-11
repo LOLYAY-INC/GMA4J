@@ -10,6 +10,7 @@ GMA4J gives you auth, end-to-end encryption, with pluggable transports (WebSocke
 - **End-to-end encryption** negotiated on connect: ephemeral ECDH (P-256) key agreement, AES-256-GCM.
 - **Trust-on-first-use server pinning** (SSH `known_hosts` style), so a swapped server key is detected and rejected.
 - **Pluggable authentication** after encryption is up: none, API key, HMAC-SHA256, or ECDSA, all **modular**.
+- **Runtime connection modes**: clients can negotiate low latency (no compression, TCP_NODELAY, urgent sends) and big size (packets beyond the 1 MiB base limit, budgeted server-side) per connection. See CLIENT.md and SERVER.md.
 - **Modular**: depend only on the client and the transport(s) you need.
 
 ## Modules
@@ -74,7 +75,7 @@ GMA4J keeps these application concerns outside the base client and server module
 
 Set `SharedConfig.MAX_PENDING_OUTBOUND_BYTES` and `MAX_PENDING_OUTBOUND_PACKETS` before opening connections. Defaults are 8 MiB and 256 packets per connection. TCP counts pending writes including length prefixes, releasing capacity when each write finishes. WebSocket counts queued frame capacities plus a conservative maximum-size frame reserved for the writer, so it requires at least two slots and enough bytes for that reserve plus a new frame. Its minimum viable byte limit is the reserve plus an empty frame; larger packets still need their own capacity.
 
-These limits do not bound kernel socket buffers or writes made directly through the underlying transport library. A rejected encoded packet or failed write closes the connection to avoid leaving a sequence gap. Ordinary sends have no remote completion guarantee.
+These limits apply to ordinary, urgent, and coalesced sends. A big-size grant does not raise the outbound queue budget; configure enough bytes for the largest intended frame and its length prefix. These limits do not bound kernel socket buffers or writes made directly through the underlying transport library. A rejected encoded packet or failed write closes the connection to avoid leaving a sequence gap. Ordinary sends have no remote completion guarantee.
 
 ## Durable evidence delivery
 

@@ -183,6 +183,25 @@ The client automatically:
 
 Tune these on `io.lolyay.gma4j.net.shared.SharedConfig` (defaults: 15s interval, 45s timeout, 10s auth window).
 
+## Connection modes
+
+After `onAuthSuccess()` you can ask the server for **low latency** and/or **big size** mode. Both can be requested (and dropped again) at any time during the connection:
+
+```java
+// lowLatency, bigSize, requested max packet size in bytes
+client.requestModes(true, true, 8 * 1024 * 1024);
+
+// the server's answer arrives on your handler:
+@Override public void onModesChanged(boolean lowLatency, boolean bigSize, int maxPacketSize) { }
+```
+
+The server grants what its policy and transport allow, so always read the actual values from `onModesChanged`:
+
+- **Low latency** disables outgoing compression, sets `TCP_NODELAY`, and unlocks `client.sendUrgent(packet)`, which bypasses any write coalescing.
+- **Big size** raises the per-packet limit above the base `SharedConfig.MAX_PACKET_SIZE` (1 MiB default), up to the granted `maxPacketSize`. The grant is capped by the server's `MAX_BIG_PACKET_SIZE`, a server-wide budget, and the transport: WebSocket frames are capped at the base size, so `bigSize` is never granted over `ws`/`wss`; use the `gma4j` (Netty) transport for big packets.
+
+Requests are rate limited server-side (1 per second); flooding mode requests disconnects the client.
+
 ## Full example
 
 ```java

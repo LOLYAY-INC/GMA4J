@@ -31,16 +31,20 @@ public class CompressionUtil {
     }
 
     public static byte[] decompress(byte[] input) throws DataFormatException {
+        return decompress(input, SharedConfig.MAX_PACKET_SIZE);
+    }
+
+    public static byte[] decompress(byte[] input, int maxSize) throws DataFormatException {
         Inflater inflater = INFLATER.get();
         inflater.reset();
         inflater.setInput(input);
 
         byte[] buffer = scratch();
-        int initialCapacity = (int) Math.min((long) input.length * 2L, SharedConfig.MAX_PACKET_SIZE);
+        int initialCapacity = (int) Math.min((long) input.length * 2L, maxSize);
         ByteArrayOutputStream out = new ByteArrayOutputStream(Math.max(32, initialCapacity));
         while (!inflater.finished()) {
             int written = inflater.inflate(buffer);
-            if (written > SharedConfig.MAX_PACKET_SIZE - out.size()) {
+            if (written > maxSize - out.size()) {
                 throw new DataFormatException("Packet too large after decompression");
             }
             if (written > 0) {

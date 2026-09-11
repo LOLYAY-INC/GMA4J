@@ -25,17 +25,18 @@ public class WsClientTransport implements IClientTransport {
 
     @Override
     public void connect(URI uri) {
+        int frameCap = SharedConfig.MAX_PACKET_SIZE;
         Draft_6455 draft = new Draft_6455(
                 Collections.emptyList(),
                 Collections.singletonList(new Protocol("")),
-                SharedConfig.MAX_PACKET_SIZE
+                frameCap
         );
 
 
         client = new WebSocketClient(uri,draft) {
             @Override
             public void onOpen(ServerHandshake handshake) {
-                listener.onConnectionEstablished(new WsClientConnection(this));
+                listener.onConnectionEstablished(new WsClientConnection(this, frameCap));
             }
 
             @Override
@@ -44,9 +45,10 @@ public class WsClientTransport implements IClientTransport {
 
             @Override
             public void onMessage(ByteBuffer bytes) {
-                if(bytes.remaining() > SharedConfig.MAX_PACKET_SIZE) {
+                int limit = listener.maxIncomingFrameSize();
+                if(bytes.remaining() > limit) {
                     PacketCodingException error = new PacketCodingException(
-                            "Packet too large: " + bytes.remaining() + " > " + SharedConfig.MAX_PACKET_SIZE);
+                            "Packet too large: " + bytes.remaining() + " > " + limit);
                     listener.onConnectionError(error);
                     close(CloseFrame.TOOBIG, "Packet too large");
                     return;

@@ -36,7 +36,7 @@ public class NettyClientTransport implements IClientTransport {
                     @Override
                     protected void initChannel(SocketChannel ch) {
                         ch.pipeline()
-                                .addLast("frameDecoder", new LimitedVarint32FrameDecoder())
+                                .addLast("frameDecoder", new LimitedVarint32FrameDecoder(listener::maxIncomingFrameSize))
                                 .addLast("frameEncoder", new ProtobufVarint32LengthFieldPrepender())
                                 .addLast("handler", new NettyClientHandler(listener));
                     }

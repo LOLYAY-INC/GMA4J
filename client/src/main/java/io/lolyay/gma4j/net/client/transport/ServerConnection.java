@@ -4,6 +4,7 @@ import io.lolyay.gma4j.net.client.net.GMA4JNetClient;
 import io.lolyay.gma4j.net.codec.ClientType;
 import io.lolyay.gma4j.net.codec.PacketPipeline;
 import io.lolyay.gma4j.net.codec.auth.client.GmaAuthClient;
+import io.lolyay.gma4j.net.codec.connection.ConnectionSettings;
 import io.lolyay.gma4j.net.codec.connection.IConnectionStateCallback;
 import io.lolyay.gma4j.net.codec.connection.MessageSender;
 import io.lolyay.gma4j.net.codec.connection.client.ClientConnectionListener;
@@ -20,6 +21,7 @@ import lombok.extern.slf4j.Slf4j;
 public class ServerConnection implements ClientConnectionListener { // client has a connection to a server
     private final GMA4JNetClient netClient;
     private final PacketPipeline pipeline;
+    private final ConnectionSettings settings;
     private final IConnectionStateCallback connectionStateCallback;
 
     private final String clientClaimedStringId;
@@ -31,14 +33,19 @@ public class ServerConnection implements ClientConnectionListener { // client ha
     private volatile boolean isConnected = false;
 
     public synchronized <T extends GMAPacket<T>> void send(T data) {
+        send(data, false);
+    }
+
+    public synchronized <T extends GMAPacket<T>> void send(T data, boolean urgent) {
         MessageSender sender = messageSender;
         if(sender == null || !isConnected) {
             log.warn("Cannot send packet, connection is not established");
             return;
         }
-        byte[] packet = pipeline.encode(data);
+        boolean expedite = urgent && settings.isLowLatency();
+        byte[] packet = pipeline.encode(data, expedite);
         try {
-            if (!sender.send(packet)) {
+            if (!sender.send(packet, expedite)) {
                 closeAfterSendFailure(sender, null);
             }
         } catch (RuntimeException failure) {
@@ -60,6 +67,24 @@ public class ServerConnection implements ClientConnectionListener { // client ha
                 log.error("Failed to close connection after an outbound send failure", closeFailure);
             }
         }
+    }
+
+    public void applyModes(boolean lowLatency, boolean bigSize) {
+        MessageSender sender = messageSender;
+        if (sender != null) {
+            sender.applyModes(lowLatency, bigSize);
+        }
+    }
+
+    /** Base size until the transport is up */
+    public int maxSupportedFrameSize() {
+        MessageSender sender = messageSender;
+        return sender == null ? settings.getBasePacketSize() : sender.maxSupportedFrameSize();
+    }
+
+    @Override
+    public int maxIncomingFrameSize() {
+        return settings.receiveAllowance();
     }
 
     @Override

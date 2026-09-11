@@ -138,6 +138,17 @@ The optional `gma4j-delivery` module persists received evidence before ACKing it
 
 Process the durable inbox separately, then mark records processed. This retains deduplication tombstones. Keep the store across server restarts; deleting it also deletes receipt evidence and deduplication history. See [durable delivery](README.md#durable-evidence-delivery) for usage and storage limits.
 
+## Connection modes
+
+Authenticated clients can request **low latency** and/or **big size** mode at runtime (see CLIENT.md). The server decides what to grant:
+
+- `SharedConfig.ALLOW_LOW_LATENCY_MODE` / `ALLOW_BIG_SIZE_MODE` switch each mode off globally.
+- Big size grants are clamped to `SharedConfig.MAX_BIG_PACKET_SIZE` (32 MiB default) per client and drawn from a server-wide budget of `SharedConfig.BIG_SIZE_TOTAL_BUDGET` (256 MiB default); once the budget is exhausted further clients stay at the base packet size. Reservations are returned when the client disconnects.
+- WebSocket transports cannot exceed the base frame size, so big size is never granted over `ws`/`wss`.
+- Mode requests are rate limited (`MODE_CHANGE_MIN_INTERVAL_MS`); a client that keeps flooding them is disconnected.
+
+`onClientModeChanged(ClientOnServer client)` on your `ServerEventHandler` fires after a grant is applied. The server can also change a client's modes itself with `client.setModes(lowLatency, bigSize, maxPacketSize)`.
+
 ## Full example
 
 ```java
