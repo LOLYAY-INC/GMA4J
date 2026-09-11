@@ -40,13 +40,36 @@ public class ServerConnection implements ClientConnectionListener { // client ha
     }
 
     public synchronized <T extends GMAPacket<T>> void send(T data, boolean urgent) {
-        if(messageSender == null || !isConnected) {
+        MessageSender sender = messageSender;
+        if(sender == null || !isConnected) {
             log.warn("Cannot send packet, connection is not established");
             return;
         }
         boolean expedite = urgent && settings.isLowLatency();
         byte[] packet = pipeline.encode(data, expedite);
-        messageSender.send(packet, expedite);
+        try {
+            if (!sender.send(packet, expedite)) {
+                closeAfterSendFailure(sender, null);
+            }
+        } catch (RuntimeException failure) {
+            closeAfterSendFailure(sender, failure);
+            throw failure;
+        }
+    }
+
+    private void closeAfterSendFailure(MessageSender sender, RuntimeException failure) {
+        if (messageSender == sender) {
+            isConnected = false;
+        }
+        try {
+            sender.close();
+        } catch (RuntimeException closeFailure) {
+            if (failure != null) {
+                failure.addSuppressed(closeFailure);
+            } else {
+                log.error("Failed to close connection after an outbound send failure", closeFailure);
+            }
+        }
     }
 
     public synchronized <T extends GMAPacket<T>> CompletableFuture<Void> sendWithCompletion(T data, boolean urgent) {
@@ -118,7 +141,9 @@ public class ServerConnection implements ClientConnectionListener { // client ha
         try {
             connectionStateCallback.onConnectionClosed(reason);
         } finally {
-            netClient.onRemoteDisconnect(sessionToken);
+            if (netClient != null) {
+                netClient.onRemoteDisconnect(sessionToken);
+            }
         }
     }
 
@@ -129,7 +154,9 @@ public class ServerConnection implements ClientConnectionListener { // client ha
         try {
             connectionStateCallback.onConnectionError(e);
         } finally {
-            netClient.onRemoteDisconnect(sessionToken);
+            if (netClient != null) {
+                netClient.onRemoteDisconnect(sessionToken);
+            }
         }
     }
 

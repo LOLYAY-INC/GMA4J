@@ -10,23 +10,23 @@ import io.lolyay.gma4j.net.shared.SharedConfig;
 import io.lolyay.gma4j.net.util.ByteReader;
 import io.lolyay.gma4j.net.util.ByteWriter;
 import lombok.Getter;
-import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
 import java.util.zip.DataFormatException;
 
 @Slf4j
 public class PacketPipeline {
-    @Setter
     private volatile PacketCryptor cryptor;
     private final Runnable closeHook;
     private final Object encodeLock = new Object();
     private final Object decodeLock = new Object();
-    private final Object dispatchLock = new Object();
+    private final ReentrantLock dispatchLock = new ReentrantLock();
     private final AtomicBoolean closed = new AtomicBoolean();
+    private boolean resourcesClosed;
     private final int maxDecodeErrors = Math.max(1, SharedConfig.MAX_DECODE_ERRORS);
     private int sequence;
     private int remoteSequence;
@@ -53,6 +53,20 @@ public class PacketPipeline {
         this.authGate = authGate;
     }
 
+    public void setCryptor(PacketCryptor cryptor) {
+        synchronized (encodeLock) {
+            synchronized (decodeLock) {
+                if (closed.get()) {
+                    if (cryptor != null) {
+                        cryptor.close();
+                    }
+                    return;
+                }
+                this.cryptor = cryptor;
+            }
+        }
+    }
+
     public <T extends GMAPacket<T>> byte[] encode(T packet) {
         return encode(packet, false);
     }
@@ -74,7 +88,8 @@ public class PacketPipeline {
     }
 
     public <T extends GMAPacket<T>> void decodeAndPassDown(byte[] data) {
-        synchronized (dispatchLock) {
+        dispatchLock.lock();
+        try {
             T packet;
             try {
                 packet = decode(data);
@@ -104,6 +119,14 @@ public class PacketPipeline {
                 distributor.distribute(packet);
             } catch (Exception e) {
                 log.error("Error while handling packet", e);
+            }
+        } finally {
+            try {
+                if (closed.get()) {
+                    closeResources();
+                }
+            } finally {
+                dispatchLock.unlock();
             }
         }
     }
@@ -291,23 +314,44 @@ public class PacketPipeline {
     }
 
     public void close() {
-        if (!closed.compareAndSet(false, true)) {
+        closed.set(true);
+        dispatchLock.lock();
+        try {
+            closeResources();
+        } finally {
+            dispatchLock.unlock();
+        }
+    }
+
+    /** Defers cleanup until an active packet handler returns. */
+    public void requestClose() {
+        closed.set(true);
+        if (dispatchLock.tryLock()) {
+            try {
+                closeResources();
+            } finally {
+                dispatchLock.unlock();
+            }
+        }
+    }
+
+    private void closeResources() {
+        if (resourcesClosed) {
             return;
         }
-        synchronized (dispatchLock) {
-            synchronized (encodeLock) {
-                synchronized (decodeLock) {
+        resourcesClosed = true;
+        synchronized (encodeLock) {
+            synchronized (decodeLock) {
+                try {
+                    distributor.close();
+                } catch (Exception e) {
+                    log.error("Error while closing distributor", e);
+                }
+                if (cryptor != null) {
                     try {
-                        distributor.close();
+                        cryptor.close();
                     } catch (Exception e) {
-                        log.error("Error while closing distributor", e);
-                    }
-                    if (cryptor != null) {
-                        try {
-                            cryptor.close();
-                        } catch (Exception e) {
-                            log.error("Error while closing cryptor", e);
-                        }
+                        log.error("Error while closing cryptor", e);
                     }
                 }
             }

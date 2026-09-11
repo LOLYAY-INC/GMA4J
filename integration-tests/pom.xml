@@ -22,6 +22,12 @@
     <dependencies>
         <dependency>
             <groupId>io.lolyay.gma4j</groupId>
+            <artifactId>gma4j-delivery</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.lolyay.gma4j</groupId>
             <artifactId>gma4j-client</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>

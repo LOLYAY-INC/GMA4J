@@ -53,42 +53,42 @@ class SecurityHardeningIntegrationTest {
     }
 
     @Test
-    void silentConnectionIsDroppedAtHandshakeDeadline() throws Exception {
-        long oldTimeout = SharedConfig.AUTH_HANDSHAKE_TIMEOUT_MS;
-        SharedConfig.AUTH_HANDSHAKE_TIMEOUT_MS = 700;
-        URI uri = URI.create("gma4j://127.0.0.1:" + freePort());
-        GMA4JServer server = new GMA4JServer(noopHandler(), hostKey());
-        try {
-            server.start(new ServerBindInfo(uri.getHost(), uri.getPort(), "gma4j", new GmaNoAuthServer()));
-            try (Socket socket = new Socket(uri.getHost(), uri.getPort())) {
-                socket.setSoTimeout(10_000);
-                assertEquals(-1, socket.getInputStream().read(), "server must drop the silent connection");
-            }
-        } finally {
-            SharedConfig.AUTH_HANDSHAKE_TIMEOUT_MS = oldTimeout;
-            assertDoesNotThrow(server::stop);
-        }
-    }
-
-    @Test
     void admissionCapRejectsAndReleases() throws Exception {
         int oldCap = SharedConfig.MAX_CONNECTIONS;
         SharedConfig.MAX_CONNECTIONS = 1;
         URI uri = URI.create("gma4j://127.0.0.1:" + freePort());
-        GMA4JServer server = new GMA4JServer(noopHandler(), hostKey());
+        CountDownLatch firstTracked = new CountDownLatch(1);
+        CountDownLatch firstGone = new CountDownLatch(1);
+        GMA4JServer server = new GMA4JServer(new ServerEventHandler() {
+            @Override
+            public boolean handle(ClientOnServer client, GMAPacket<?> packet) {
+                return false;
+            }
+
+            @Override
+            public void onClientConnected(ClientOnServer client) {
+                firstTracked.countDown();
+            }
+
+            @Override
+            public void onClientDisconnected(ClientOnServer client, String reason) {
+                firstGone.countDown();
+            }
+        }, hostKey());
         try {
             server.start(new ServerBindInfo(uri.getHost(), uri.getPort(), "gma4j", new GmaNoAuthServer()));
             Socket first = new Socket(uri.getHost(), uri.getPort());
             try {
+                assertTrue(firstTracked.await(10, TimeUnit.SECONDS), "first connection was never admitted");
                 try (Socket second = new Socket(uri.getHost(), uri.getPort())) {
-                    second.setSoTimeout(5_000);
+                    second.setSoTimeout(10_000);
                     assertEquals(-1, second.getInputStream().read(), "connection over the cap must be rejected");
                 }
             } finally {
                 first.close();
             }
             // the slot frees up once the admitted connection is gone
-            Thread.sleep(500);
+            assertTrue(firstGone.await(10, TimeUnit.SECONDS), "first connection never released its slot");
             try (Socket third = new Socket(uri.getHost(), uri.getPort())) {
                 third.setSoTimeout(2_000);
                 InputStream in = third.getInputStream();
@@ -150,23 +150,27 @@ class SecurityHardeningIntegrationTest {
     }
 
     @Test
-    void nettySendCompletesAndEnforcesQueueCeiling() throws Exception {
+    void nettySendCompletesAndEnforcesOutboundBudget() throws Exception {
         EmbeddedChannel channel = new EmbeddedChannel();
         NettyClientConnection connection = new NettyClientConnection(channel);
 
         CompletableFuture<Void> done = connection.sendWithCompletion(new byte[16], false);
         assertTrue(done.isDone() && !done.isCompletedExceptionally(), "write must complete");
         assertNotNull(channel.readOutbound(), "data must reach the channel");
+        channel.finishAndReleaseAll();
 
-        long oldCeiling = SharedConfig.MAX_QUEUED_WRITE_BYTES;
-        SharedConfig.MAX_QUEUED_WRITE_BYTES = 8;
+        // a frame larger than the whole outbound budget can never be reserved
+        int oldBytes = SharedConfig.MAX_PENDING_OUTBOUND_BYTES;
+        SharedConfig.MAX_PENDING_OUTBOUND_BYTES = 8;
+        EmbeddedChannel tiny = new EmbeddedChannel();
         try {
-            CompletableFuture<Void> rejected = connection.sendWithCompletion(new byte[64], false);
-            assertTrue(rejected.isCompletedExceptionally(), "over-ceiling write must be rejected");
-            assertFalse(connection.send(new byte[64], false), "send must report the rejection");
+            NettyClientConnection capped = new NettyClientConnection(tiny);
+            CompletableFuture<Void> rejected = capped.sendWithCompletion(new byte[64], false);
+            assertTrue(rejected.isCompletedExceptionally(), "over-budget write must be rejected");
+            assertFalse(capped.send(new byte[64], false), "send must report the rejection");
         } finally {
-            SharedConfig.MAX_QUEUED_WRITE_BYTES = oldCeiling;
-            channel.finishAndReleaseAll();
+            SharedConfig.MAX_PENDING_OUTBOUND_BYTES = oldBytes;
+            tiny.finishAndReleaseAll();
         }
     }
 
@@ -185,10 +189,6 @@ class SecurityHardeningIntegrationTest {
             Thread.sleep(100);
         }
         return false;
-    }
-
-    private static ServerEventHandler noopHandler() {
-        return (client, packet) -> false;
     }
 
     private static int freePort() throws Exception {

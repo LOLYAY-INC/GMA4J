@@ -1,7 +1,9 @@
 package io.lolyay.gma4j.net.transport.netty;
 
 import io.lolyay.gma4j.net.codec.connection.MessageSender;
+import io.lolyay.gma4j.net.codec.connection.OutboundBudget;
 import io.lolyay.gma4j.net.shared.SharedConfig;
+import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
@@ -9,19 +11,20 @@ import io.netty.channel.ChannelOption;
 import io.netty.channel.WriteBufferWaterMark;
 
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicLong;
 
 public class NettyClientConnection implements MessageSender {
-
     private final Channel channel;
+    private final OutboundBudget outboundBudget;
     private final AtomicBoolean flushPending = new AtomicBoolean();
-    private final AtomicLong queuedBytes = new AtomicLong();
     private volatile boolean coalesceFlush;
+    private volatile boolean closing;
 
     public NettyClientConnection(Channel channel) {
         this.channel = channel;
+        this.outboundBudget = new OutboundBudget(
+                SharedConfig.MAX_PENDING_OUTBOUND_BYTES,
+                SharedConfig.MAX_PENDING_OUTBOUND_PACKETS);
     }
 
     @Override
@@ -31,34 +34,87 @@ public class NettyClientConnection implements MessageSender {
 
     @Override
     public boolean send(byte[] data, boolean urgent) {
-        return !sendWithCompletion(data, urgent).isCompletedExceptionally();
+        return dispatch(data, urgent, null);
     }
 
     @Override
     public CompletableFuture<Void> sendWithCompletion(byte[] data, boolean urgent) {
-        if (!channel.isActive()) {
-            return CompletableFuture.failedFuture(new IllegalStateException("Channel is not active"));
-        }
-        long queued = queuedBytes.addAndGet(data.length);
-        if (queued > SharedConfig.MAX_QUEUED_WRITE_BYTES) {
-            queuedBytes.addAndGet(-data.length);
-            return CompletableFuture.failedFuture(new IllegalStateException(
-                    "Send queue full: " + queued + " > " + SharedConfig.MAX_QUEUED_WRITE_BYTES));
-        }
         CompletableFuture<Void> done = new CompletableFuture<>();
-        if (urgent || !coalesceFlush) {
-            track(channel.writeAndFlush(Unpooled.wrappedBuffer(data)), data.length, done);
-        } else if (channel.eventLoop().inEventLoop()) {
-            writeCoalesced(data, done);
-        } else {
+        dispatch(data, urgent, done);
+        return done;
+    }
+
+    private boolean dispatch(byte[] data, boolean urgent, CompletableFuture<Void> done) {
+        if (closing || !channel.isActive()) {
+            fail(done, new IllegalStateException("Channel is not active"));
+            return false;
+        }
+        OutboundBudget.Reservation reservation = outboundBudget.tryReserve(
+                OutboundBudget.protobufFrameBytes(data.length));
+        if (reservation == null) {
+            close();
+            fail(done, new IllegalStateException("Outbound budget exhausted"));
+            return false;
+        }
+        boolean coalesced = coalesceFlush && !urgent;
+        if (coalesced && !channel.eventLoop().inEventLoop()) {
             try {
-                channel.eventLoop().execute(() -> writeCoalesced(data, done));
-            } catch (RejectedExecutionException e) {
-                queuedBytes.addAndGet(-data.length);
-                done.completeExceptionally(e);
+                channel.eventLoop().execute(() -> write(data, reservation, true, done));
+                return true;
+            } catch (RuntimeException failure) {
+                reservation.close();
+                close();
+                fail(done, failure);
+                return false;
             }
         }
-        return done;
+        return write(data, reservation, coalesced, done);
+    }
+
+    private boolean write(byte[] data, OutboundBudget.Reservation reservation, boolean coalesced, CompletableFuture<Void> done) {
+        if (closing || !channel.isActive()) {
+            reservation.close();
+            fail(done, new IllegalStateException("Channel is not active"));
+            return false;
+        }
+        ByteBuf buffer = Unpooled.wrappedBuffer(data);
+        boolean submitted = false;
+        try {
+            ChannelFuture future = coalesced ? channel.write(buffer) : channel.writeAndFlush(buffer);
+            submitted = true;
+            future.addListener(completed -> {
+                reservation.close();
+                if (completed.isSuccess()) {
+                    if (done != null) {
+                        done.complete(null);
+                    }
+                } else {
+                    close();
+                    fail(done, completed.cause());
+                }
+            });
+            if (coalesced && flushPending.compareAndSet(false, true)) {
+                channel.eventLoop().execute(() -> {
+                    flushPending.set(false);
+                    channel.flush();
+                });
+            }
+            return !future.isDone() || future.isSuccess();
+        } catch (RuntimeException failure) {
+            reservation.close();
+            if (!submitted && buffer.refCnt() > 0) {
+                buffer.release();
+            }
+            close();
+            fail(done, failure);
+            return false;
+        }
+    }
+
+    private static void fail(CompletableFuture<Void> done, Throwable cause) {
+        if (done != null) {
+            done.completeExceptionally(cause);
+        }
     }
 
     @Override
@@ -70,30 +126,9 @@ public class NettyClientConnection implements MessageSender {
                 : WriteBufferWaterMark.DEFAULT);
     }
 
-    /** Write and flush scheduling stay on the event loop so no write can miss its flush */
-    private void writeCoalesced(byte[] data, CompletableFuture<Void> done) {
-        track(channel.write(Unpooled.wrappedBuffer(data)), data.length, done);
-        if (flushPending.compareAndSet(false, true)) {
-            channel.eventLoop().execute(() -> {
-                flushPending.set(false);
-                channel.flush();
-            });
-        }
-    }
-
-    private void track(ChannelFuture future, int size, CompletableFuture<Void> done) {
-        future.addListener(f -> {
-            queuedBytes.addAndGet(-size);
-            if (f.isSuccess()) {
-                done.complete(null);
-            } else {
-                done.completeExceptionally(f.cause());
-            }
-        });
-    }
-
     @Override
     public void close() {
+        closing = true;
         channel.close();
     }
 }

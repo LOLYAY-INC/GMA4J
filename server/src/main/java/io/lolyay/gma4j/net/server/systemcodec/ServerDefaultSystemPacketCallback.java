@@ -23,10 +23,13 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ServerDefaultSystemPacketCallback implements SystemPacketCallback {
     private final ClientOnServer client;
-    private ConnectionState connectionState = ConnectionState.HANDSHAKE;
+    private volatile ConnectionState connectionState = ConnectionState.HANDSHAKE;
 
     @Override
     public <T extends GMAPacket<T>> void onSystemPacket(T packet) {
+        if(!client.isConnected()) {
+            return;
+        }
         if(packet instanceof C2SKeepAlivePacket(long id)) {
             client.send(new S2CKeepAlivePacket(id));
             return;
@@ -76,6 +79,9 @@ public class ServerDefaultSystemPacketCallback implements SystemPacketCallback {
                     packet.dhParams(),
                     packet.supportedAuthTypes()
             );
+            if(!client.isConnected()) {
+                return;
+            }
             GmaAuthServer authServer = client.getNetServer().getAuthServer(response.selectedAuthType());
 
             if(authServer == null) {
@@ -127,7 +133,9 @@ public class ServerDefaultSystemPacketCallback implements SystemPacketCallback {
         GmaAuthServer authServer = client.getSelectedAuthServer();
 
         byte[] challenge = authServer.createChallenge(pendingAuthID, packet.claimedClientId(), packet.extraAuthData());
-        client.setPendingChallenge(challenge);
+        if(!client.acceptPendingChallenge(challenge)) {
+            return;
+        }
         connectionState = ConnectionState.AWAITING_AUTH_RESPONSE;
         client.send(new S2CAuthChallengePacket(challenge, pendingAuthID));
     }
@@ -154,6 +162,9 @@ public class ServerDefaultSystemPacketCallback implements SystemPacketCallback {
                 client.getEncryptionState().getStateHash()
         );
 
+        if(!client.isConnected()) {
+            return;
+        }
         if(!ok) {
             log.warn("Auth failed for {}", client.getClaimedClientId());
             client.send(new S2CAuthStatusPacket(false));
@@ -161,23 +172,29 @@ public class ServerDefaultSystemPacketCallback implements SystemPacketCallback {
             return;
         }
 
-        UUID assignedId = client.getNetServer().registerClient(client);
-        if(assignedId == null) {
+        if(!client.completeAuthentication()) {
+            if(!client.isConnected()) {
+                return;
+            }
             log.warn("Rejecting {}: claimed id '{}' already in use", client.getRemoteId(), client.getClaimedClientId());
             client.send(new S2CAuthStatusPacket(false));
             client.disconnect("Duplicate client id");
             return;
         }
 
-
         if(client.getClientType() != ClientType.GMA4J_JAVA) {
             // Send Compat packet
             client.send(S2CCodecStateUpdatePacket.of(CodecRegistry.getInstance().getConfig()));
         }
 
-        client.setAuthenticated(true);
+        if(!client.isConnected()) {
+            return;
+        }
         connectionState = ConnectionState.CONNECTED;
         client.send(new S2CAuthStatusPacket(true));
+        if(!client.isConnected()) {
+            return;
+        }
         log.info("Client authenticated: {} ({})", client.getClaimedClientId(), client.getAssignedId());
         client.getNetServer().getEventHandler().onClientAuthenticated(client);
     }
