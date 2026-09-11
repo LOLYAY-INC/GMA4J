@@ -60,7 +60,9 @@ public class ClientDefaultSystemPacketCallback implements SystemPacketCallback {
             netClient.disconnectWithError(new Exception("Mode status before auth"));
             return;
         }
-        if(packet.maxPacketSize() < 0 || (packet.bigSize() && packet.maxPacketSize() > SharedConfig.MAX_BIG_PACKET_SIZE)) {
+        if(packet.maxPacketSize() < 0
+                || (packet.bigSize() && (packet.maxPacketSize() <= netClient.getConnectionSettings().getBasePacketSize()
+                        || packet.maxPacketSize() > SharedConfig.MAX_BIG_PACKET_SIZE))) {
             netClient.disconnectWithError(new Exception("Invalid mode grant size: " + packet.maxPacketSize()));
             return;
         }

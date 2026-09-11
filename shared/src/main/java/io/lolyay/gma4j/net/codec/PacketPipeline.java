@@ -210,8 +210,9 @@ public class PacketPipeline {
         } catch (Exception e) {
             throw new PacketCodingException("Error encoding packet: " + packetId, e);
         }
-        if (payload.length > limit) {
-            throw new PacketCodingException("Packet payload too large: " + payload.length
+        // plus header, so the peer can always decompress back to this size
+        if (payload.length + 8 > limit) {
+            throw new PacketCodingException("Packet plaintext too large: " + (payload.length + 8)
                     + " > " + limit);
         }
         // BIG reflects the plaintext size, decided before compression can shrink it
