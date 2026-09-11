@@ -16,11 +16,13 @@ public final class ConnectionSettings {
     private volatile boolean bigSize;
     private volatile int sendLimit;
     private volatile int receiveLimit;
+    private volatile int receiveAllowance;
     private volatile boolean urgentReceiveAllowed;
 
     public ConnectionSettings() {
         this.sendLimit = basePacketSize;
         this.receiveLimit = basePacketSize;
+        this.receiveAllowance = basePacketSize;
     }
 
     public synchronized void apply(boolean lowLatency, boolean bigSize, int maxPacketSize) {
@@ -29,9 +31,16 @@ public final class ConnectionSettings {
         int granted = bigSize ? Math.max(basePacketSize, maxPacketSize) : basePacketSize;
         this.sendLimit = granted;
         this.receiveLimit = Math.max(this.receiveLimit, granted);
+        this.receiveAllowance = Math.max(this.receiveAllowance, this.receiveLimit);
         if (lowLatency) {
             this.urgentReceiveAllowed = true;
         }
+    }
+
+    /** Frame decoder headroom so a grant already in flight is not cut off mid-read */
+    public synchronized void raiseReceiveAllowance(int size) {
+        int capped = Math.min(Math.max(size, basePacketSize), SharedConfig.MAX_BIG_PACKET_SIZE);
+        this.receiveAllowance = Math.max(this.receiveAllowance, capped);
     }
 
     public int sendLimit() {
@@ -40,6 +49,10 @@ public final class ConnectionSettings {
 
     public int receiveLimit() {
         return receiveLimit;
+    }
+
+    public int receiveAllowance() {
+        return receiveAllowance;
     }
 
     public boolean isUrgentReceiveAllowed() {

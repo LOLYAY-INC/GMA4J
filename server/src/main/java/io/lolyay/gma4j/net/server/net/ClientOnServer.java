@@ -84,11 +84,15 @@ public class ClientOnServer implements ServerConnectionListener, IPacketHandler 
             log.warn("Cannot send packet to {}, connection is not established", describe());
             return;
         }
-        messageSender.send(pipeline.encode(packet, urgent), urgent);
+        boolean expedite = urgent && settings.isLowLatency();
+        messageSender.send(pipeline.encode(packet, expedite), expedite);
     }
 
     /** Status goes out under the old settings, then the new ones apply */
     public synchronized void setModes(boolean lowLatency, boolean bigSize, int requestedMaxPacketSize) {
+        if (!connected) {
+            return;
+        }
         boolean grantLowLatency = lowLatency && SharedConfig.ALLOW_LOW_LATENCY_MODE;
         boolean grantBig = bigSize && SharedConfig.ALLOW_BIG_SIZE_MODE;
         int granted = settings.getBasePacketSize();
@@ -117,7 +121,8 @@ public class ClientOnServer implements ServerConnectionListener, IPacketHandler 
         if (delta > 0) {
             bigSizeReserved += netServer.reserveBigSizeBudget(delta);
         }
-        return (int) (base + bigSizeReserved);
+        // the reservation is monotonic for receive capacity, the grant is not
+        return (int) Math.min(wanted, base + bigSizeReserved);
     }
 
     public synchronized boolean modeChangeAllowed() {
@@ -135,7 +140,7 @@ public class ClientOnServer implements ServerConnectionListener, IPacketHandler 
 
     @Override
     public int maxIncomingFrameSize() {
-        return settings.receiveLimit();
+        return settings.receiveAllowance();
     }
 
     public void disconnect(String reason) {

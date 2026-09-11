@@ -41,8 +41,9 @@ public class ServerConnection implements ClientConnectionListener { // client ha
             log.warn("Cannot send packet, connection is not established");
             return;
         }
-        byte[] packet = pipeline.encode(data, urgent);
-        messageSender.send(packet, urgent);
+        boolean expedite = urgent && settings.isLowLatency();
+        byte[] packet = pipeline.encode(data, expedite);
+        messageSender.send(packet, expedite);
     }
 
     public void applyModes(boolean lowLatency, boolean bigSize) {
@@ -54,7 +55,7 @@ public class ServerConnection implements ClientConnectionListener { // client ha
 
     @Override
     public int maxIncomingFrameSize() {
-        return settings.receiveLimit();
+        return settings.receiveAllowance();
     }
 
     @Override

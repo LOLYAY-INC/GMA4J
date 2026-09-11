@@ -180,6 +180,13 @@ public class GMA4JNetClient {
         if(requestedMaxPacketSize < 0) {
             throw new IllegalArgumentException("requestedMaxPacketSize must be >= 0");
         }
+        if(requestedMaxPacketSize > SharedConfig.MAX_BIG_PACKET_SIZE) {
+            throw new IllegalArgumentException("requestedMaxPacketSize exceeds MAX_BIG_PACKET_SIZE");
+        }
+        if(bigSize) {
+            // raise the decoder allowance now so a grant in the same read is not cut off
+            connectionSettings.raiseReceiveAllowance(requestedMaxPacketSize);
+        }
         send(new C2SModeRequestPacket(lowLatency, bigSize, requestedMaxPacketSize));
     }
 

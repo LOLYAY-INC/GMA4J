@@ -193,6 +193,73 @@ class ConnectionModesTest {
     }
 
     @Test
+    void bigFlagFollowsPlaintextSizeThroughCompression() {
+        int max = SharedConfig.MAX_PACKET_SIZE;
+        int threshold = SharedConfig.PACKET_COMPRESSION_THRESHOLD;
+        try {
+            SharedConfig.MAX_PACKET_SIZE = 256;
+            SharedConfig.PACKET_COMPRESSION_THRESHOLD = 1;
+            ConnectionSettings senderSettings = new ConnectionSettings();
+            ConnectionSettings receiverSettings = new ConnectionSettings();
+            senderSettings.apply(false, true, 10_000);
+            receiverSettings.apply(false, true, 10_000);
+
+            BinaryPacket packet = new BinaryPacket(1, 2L, true, "x".repeat(1_000), 3);
+            byte[] frame = pipeline(senderSettings).encode(packet);
+            assertTrue((frame[4] & PacketFlags.COMPRESSED) != 0);
+            assertTrue(frame.length <= 256, "compressible payload should shrink below base");
+            assertTrue((frame[4] & PacketFlags.BIG) != 0, "big must reflect the plaintext size");
+            assertEquals(packet, pipeline(receiverSettings).decode(frame));
+
+            byte[] ungrantedCopy = pipeline(senderSettings).encode(packet);
+            assertThrows(PacketCodingException.class, () -> pipeline(new ConnectionSettings()).decode(ungrantedCopy));
+        } finally {
+            SharedConfig.MAX_PACKET_SIZE = max;
+            SharedConfig.PACKET_COMPRESSION_THRESHOLD = threshold;
+        }
+    }
+
+    @Test
+    void unflaggedCompressedBombRejected() {
+        int max = SharedConfig.MAX_PACKET_SIZE;
+        int threshold = SharedConfig.PACKET_COMPRESSION_THRESHOLD;
+        try {
+            SharedConfig.MAX_PACKET_SIZE = 256;
+            SharedConfig.PACKET_COMPRESSION_THRESHOLD = 1;
+            ConnectionSettings senderSettings = new ConnectionSettings();
+            ConnectionSettings receiverSettings = new ConnectionSettings();
+            senderSettings.apply(false, true, 10_000);
+            receiverSettings.apply(false, true, 10_000);
+
+            byte[] frame = pipeline(senderSettings).encode(new BinaryPacket(1, 2L, true, "x".repeat(1_000), 3));
+            frame[4] &= (byte) ~PacketFlags.BIG;
+            assertThrows(PacketCodingException.class, () -> pipeline(receiverSettings).decode(frame));
+        } finally {
+            SharedConfig.MAX_PACKET_SIZE = max;
+            SharedConfig.PACKET_COMPRESSION_THRESHOLD = threshold;
+        }
+    }
+
+    @Test
+    void receiveAllowanceLeadsTheGrant() {
+        int max = SharedConfig.MAX_PACKET_SIZE;
+        try {
+            SharedConfig.MAX_PACKET_SIZE = 256;
+            ConnectionSettings settings = new ConnectionSettings();
+            settings.raiseReceiveAllowance(10_000);
+            assertEquals(10_000, settings.receiveAllowance());
+            assertEquals(256, settings.receiveLimit(), "policy limit must not move before the grant");
+            assertFalse(settings.isBigReceiveAllowed());
+
+            settings.apply(false, true, 20_000);
+            assertEquals(20_000, settings.receiveLimit());
+            assertEquals(20_000, settings.receiveAllowance());
+        } finally {
+            SharedConfig.MAX_PACKET_SIZE = max;
+        }
+    }
+
+    @Test
     void decompressionIsBounded() throws DataFormatException {
         byte[] data = new byte[5_000];
         for (int i = 0; i < data.length; i++) {

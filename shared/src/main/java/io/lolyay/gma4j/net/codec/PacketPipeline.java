@@ -144,11 +144,8 @@ public class PacketPipeline {
         boolean compressed = (flags & PacketFlags.COMPRESSED) != 0;
         boolean big = (flags & PacketFlags.BIG) != 0;
         boolean urgent = (flags & PacketFlags.URGENT) != 0;
-        boolean oversized = data.length > settings.getBasePacketSize();
-        if (big != oversized) {
-            throw new PacketCodingException(big
-                    ? "Big flag on packet of " + data.length + " bytes"
-                    : "Oversized packet of " + data.length + " bytes without big flag");
+        if (data.length > settings.getBasePacketSize() && !big) {
+            throw new PacketCodingException("Oversized packet of " + data.length + " bytes without big flag");
         }
         if (big && !settings.isBigReceiveAllowed()) {
             throw new PacketCodingException("Big packet without granted big size mode");
@@ -179,12 +176,20 @@ public class PacketPipeline {
                 return null;
             }
             int compressedLength = payload.length;
+            int plaintextLimit = (big ? settings.receiveLimit() : settings.getBasePacketSize()) - 8;
             try {
-                payload = CompressionUtil.decompress(payload, settings.receiveLimit());
+                payload = CompressionUtil.decompress(payload, plaintextLimit);
             } catch (DataFormatException e) {
                 throw new PacketCodingException("Error while decompressing packet", e);
             }
             log.debug("Decompressed incoming packet {}: {} -> {} bytes", packetId, compressedLength, payload.length);
+        }
+
+        // the flag must match the plaintext size the sender saw
+        if (big != (payload.length + 8 > settings.getBasePacketSize())) {
+            throw new PacketCodingException(big
+                    ? "Big flag on plaintext of " + (payload.length + 8) + " bytes"
+                    : "Oversized plaintext of " + (payload.length + 8) + " bytes without big flag");
         }
 
         try {
@@ -209,6 +214,8 @@ public class PacketPipeline {
             throw new PacketCodingException("Packet payload too large: " + payload.length
                     + " > " + limit);
         }
+        // BIG reflects the plaintext size, decided before compression can shrink it
+        boolean big = payload.length + 8 > settings.getBasePacketSize();
 
         // low latency trades bandwidth for the compression stall
         if (!settings.isLowLatency()
@@ -228,7 +235,7 @@ public class PacketPipeline {
         }
 
         int flags = compressed ? PacketFlags.COMPRESSED : 0;
-        if (payload.length + 8 > settings.getBasePacketSize()) {
+        if (big) {
             flags |= PacketFlags.BIG;
         }
         if (urgent && settings.isLowLatency()) {
