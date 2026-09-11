@@ -2,6 +2,7 @@ package io.lolyay.gma4j.codec;
 
 import io.lolyay.gma4j.codec.fixtures.BinaryPacket;
 import io.lolyay.gma4j.codec.fixtures.ComplexPacket;
+import io.lolyay.gma4j.codec.fixtures.IncompressiblePacket;
 import io.lolyay.gma4j.codec.fixtures.LargeJsonPacket;
 import io.lolyay.gma4j.codec.fixtures.TinyPacket;
 import io.lolyay.gma4j.net.codec.CodecRegistry;
@@ -38,6 +39,7 @@ class ConnectionModesTest {
         registry.addCodec(LargeJsonPacket.TYPE);
         registry.addCodec(BinaryPacket.TYPE);
         registry.addCodec(TinyPacket.TYPE);
+        registry.addCodec(IncompressiblePacket.TYPE);
         registry.warmup();
     }
 

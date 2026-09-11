@@ -2,6 +2,7 @@ package io.lolyay.gma4j.codec;
 
 import io.lolyay.gma4j.codec.fixtures.BinaryPacket;
 import io.lolyay.gma4j.codec.fixtures.ComplexPacket;
+import io.lolyay.gma4j.codec.fixtures.IncompressiblePacket;
 import io.lolyay.gma4j.codec.fixtures.LargeJsonPacket;
 import io.lolyay.gma4j.codec.fixtures.TinyPacket;
 import io.lolyay.gma4j.net.codec.CodecRegistry;
@@ -38,6 +39,7 @@ class PacketPipelineTest {
         registry.addCodec(LargeJsonPacket.TYPE);
         registry.addCodec(BinaryPacket.TYPE);
         registry.addCodec(TinyPacket.TYPE);
+        registry.addCodec(IncompressiblePacket.TYPE);
         registry.warmup();
     }
 
@@ -96,6 +98,25 @@ class PacketPipelineTest {
             assertEquals(0, encoded[4]);
         } finally {
             SharedConfig.PACKET_COMPRESSION_ENABLED = enabled;
+            SharedConfig.PACKET_COMPRESSION_THRESHOLD = threshold;
+        }
+    }
+
+    @Test
+    void compressionPredicateIsPerPacket() {
+        int threshold = SharedConfig.PACKET_COMPRESSION_THRESHOLD;
+        try {
+            SharedConfig.PACKET_COMPRESSION_THRESHOLD = 1;
+            String blob = "data".repeat(2_000);
+
+            byte[] plain = pipeline().encode(new IncompressiblePacket(blob, false));
+            assertEquals(0, plain[4], "predicate must veto compression");
+            assertEquals(new IncompressiblePacket(blob, false), pipeline().decode(plain));
+
+            byte[] squeezed = pipeline().encode(new IncompressiblePacket(blob, true));
+            assertEquals(1, squeezed[4]);
+            assertEquals(new IncompressiblePacket(blob, true), pipeline().decode(squeezed));
+        } finally {
             SharedConfig.PACKET_COMPRESSION_THRESHOLD = threshold;
         }
     }
