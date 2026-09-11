@@ -93,7 +93,9 @@ public class ClientDefaultSystemPacketCallback implements SystemPacketCallback {
     }
 
     private void onS2CHello(S2CHelloPacket s2CHelloPacket) {
-        if(connectionState != ConnectionState.HANDSHAKE) {
+        boolean shouldAllowReAuth =
+                netClient.isAuthenticated() && connectionState == ConnectionState.CONNECTED && netClient.getParent().allowReAuth;
+        if(connectionState != ConnectionState.HANDSHAKE && !shouldAllowReAuth) {
             log.error("Server sent hello packet while not in handshake state");
             netClient.disconnectWithError(new Exception("Server sent hello packet while not in handshake state"));
             return;
