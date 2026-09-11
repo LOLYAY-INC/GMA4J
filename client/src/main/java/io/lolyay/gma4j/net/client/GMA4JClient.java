@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 
 import java.util.Arrays;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -34,6 +35,10 @@ public class GMA4JClient {
     private GMA4JNetClient netClient;
 
     public void connect(ClientConnectionInfo clientConnectionInfo) {
+        // never replace a client that still owns timers or a transport
+        if(netClient != null) {
+            netClient.disconnect();
+        }
         this.netClient = new GMA4JNetClient(clientEventHandler, clientConnectionInfo.clientId(), Arrays.stream(clientConnectionInfo.authClients())
                 .collect(Collectors.toMap(GmaAuthClient::authType, Function.identity())), knownCertificateKeeper, codecRegistry, this);
         netClient.connect(clientConnectionInfo.uri().toString());
@@ -50,6 +55,18 @@ public class GMA4JClient {
             throw new IllegalStateException("Not connected");
         }
         netClient.sendUrgent(packet);
+    }
+
+    /** Completes when the transport wrote the packet */
+    public <T extends GMAPacket<T>> CompletableFuture<Void> sendWithCompletion(T packet) {
+        return sendWithCompletion(packet, false);
+    }
+
+    public <T extends GMAPacket<T>> CompletableFuture<Void> sendWithCompletion(T packet, boolean urgent) {
+        if(netClient == null || !netClient.isConnected()) {
+            return CompletableFuture.failedFuture(new IllegalStateException("Not connected"));
+        }
+        return netClient.sendWithCompletion(packet, urgent);
     }
 
     /**

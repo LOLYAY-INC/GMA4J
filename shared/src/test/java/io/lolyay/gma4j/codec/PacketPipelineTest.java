@@ -4,8 +4,8 @@ import io.lolyay.gma4j.codec.fixtures.BinaryPacket;
 import io.lolyay.gma4j.codec.fixtures.ComplexPacket;
 import io.lolyay.gma4j.codec.fixtures.IncompressiblePacket;
 import io.lolyay.gma4j.codec.fixtures.LargeJsonPacket;
+import io.lolyay.gma4j.codec.fixtures.TestCodecs;
 import io.lolyay.gma4j.codec.fixtures.TinyPacket;
-import io.lolyay.gma4j.net.codec.CodecRegistry;
 import io.lolyay.gma4j.net.codec.PacketCodingException;
 import io.lolyay.gma4j.net.codec.PacketPipeline;
 import io.lolyay.gma4j.net.codec.encryption.PacketCryptor;
@@ -22,6 +22,11 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -34,13 +39,46 @@ class PacketPipelineTest {
 
     @BeforeAll
     static void registerAndWarmup() {
-        CodecRegistry registry = CodecRegistry.getInstance();
-        registry.addCodec(ComplexPacket.TYPE);
-        registry.addCodec(LargeJsonPacket.TYPE);
-        registry.addCodec(BinaryPacket.TYPE);
-        registry.addCodec(TinyPacket.TYPE);
-        registry.addCodec(IncompressiblePacket.TYPE);
-        registry.warmup();
+        TestCodecs.registerAll();
+    }
+
+    @Test
+    void closeRequestDoesNotWaitForActiveHandler() throws Exception {
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        AtomicInteger cleanupCount = new AtomicInteger();
+        PacketPipeline receiver = new PacketPipeline(() -> {}, new IPacketDistributor() {
+            @Override
+            public <T extends GMAPacket<T>> void distribute(T packet) {
+                entered.countDown();
+                try {
+                    release.await();
+                } catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+
+            @Override
+            public void close() {
+                cleanupCount.incrementAndGet();
+            }
+        });
+        try (ExecutorService executor = Executors.newSingleThreadExecutor()) {
+            Future<?> dispatch = executor.submit(() ->
+                    receiver.decodeAndPassDown(pipeline().encode(new TinyPacket(7))));
+            try {
+                assertTrue(entered.await(5, TimeUnit.SECONDS));
+                org.junit.jupiter.api.Assertions.assertTimeoutPreemptively(
+                        java.time.Duration.ofSeconds(1), receiver::requestClose);
+                assertThrows(IllegalStateException.class, () -> receiver.encode(new TinyPacket(8)));
+                assertEquals(0, cleanupCount.get());
+            } finally {
+                release.countDown();
+            }
+            dispatch.get(5, TimeUnit.SECONDS);
+            receiver.close();
+            assertEquals(1, cleanupCount.get());
+        }
     }
 
     @Test

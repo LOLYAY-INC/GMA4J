@@ -22,6 +22,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.util.Arrays;
 import java.util.UUID;
+import java.util.concurrent.ScheduledFuture;
 
 @Slf4j
 @Getter
@@ -33,8 +34,17 @@ public class ClientOnServer implements ServerConnectionListener, IPacketHandler 
     private final ConnectionSettings settings;
 
     @Getter(AccessLevel.NONE)
+    private final Object lifecycleMonitor = new Object();
+    @Getter(AccessLevel.NONE)
     private volatile MessageSender messageSender;
+    @Getter(AccessLevel.NONE)
+    private ScheduledFuture<?> handshakeDeadline;
     private volatile boolean connected = false;
+    private volatile boolean authenticated = false;
+    @Getter(AccessLevel.NONE)
+    private volatile boolean closed = false;
+    @Getter(AccessLevel.NONE)
+    private boolean disconnectedNotified = false;
 
     @Getter(AccessLevel.NONE)
     private long bigSizeReserved;
@@ -45,17 +55,15 @@ public class ClientOnServer implements ServerConnectionListener, IPacketHandler 
 
     @Getter
     @Setter
-    private ClientType clientType;
+    private volatile ClientType clientType;
     @Setter
-    private UUID assignedId;
+    private volatile UUID assignedId;
     @Setter
-    private String claimedClientId;
+    private volatile String claimedClientId;
     @Setter
-    private boolean authenticated = false;
+    private volatile GmaAuthServer selectedAuthServer;
     @Setter
-    private GmaAuthServer selectedAuthServer;
-    @Setter
-    private byte[] pendingChallenge;
+    private volatile byte[] pendingChallenge;
 
     public ClientOnServer(GMA4JNetServer netServer, String remoteId) {
         this.netServer = netServer;
@@ -66,7 +74,8 @@ public class ClientOnServer implements ServerConnectionListener, IPacketHandler 
                 this::disconnect,
                 new PacketDistributorImpl(new ServerDefaultSystemPacketCallback(this),
                         this, () -> authenticated),
-                settings
+                settings,
+                () -> authenticated
         );
     }
 
@@ -80,12 +89,22 @@ public class ClientOnServer implements ServerConnectionListener, IPacketHandler 
     }
 
     public synchronized <T extends GMAPacket<T>> void send(T packet, boolean urgent) {
-        if(messageSender == null || !connected) {
+        MessageSender sender = messageSender;
+        if(sender == null || !connected) {
             log.warn("Cannot send packet to {}, connection is not established", describe());
             return;
         }
         boolean expedite = urgent && settings.isLowLatency();
-        messageSender.send(pipeline.encode(packet, expedite), expedite);
+        byte[] encoded = pipeline.encode(packet, expedite);
+        try {
+            if(!sender.send(encoded, expedite)) {
+                log.warn("Sender rejected packet for {}", describe());
+                disconnect("Packet send rejected");
+            }
+        } catch (RuntimeException e) {
+            log.warn("Sender failed for {}", describe(), e);
+            disconnect("Packet send failed");
+        }
     }
 
     /** Status goes out under the old settings, then the new ones apply */
@@ -101,6 +120,9 @@ public class ClientOnServer implements ServerConnectionListener, IPacketHandler 
             grantBig = granted > settings.getBasePacketSize();
         }
         send(new S2CModeStatusPacket(grantLowLatency, grantBig, granted));
+        if (!connected) {
+            return;
+        }
         settings.apply(grantLowLatency, grantBig, granted);
         MessageSender sender = messageSender;
         if (sender != null) {
@@ -110,19 +132,23 @@ public class ClientOnServer implements ServerConnectionListener, IPacketHandler 
         netServer.getEventHandler().onClientModeChanged(this);
     }
 
-    /** Reservations are kept until disconnect since receive limits never shrink */
+    /** Reservations last until disconnect since receive limits never shrink. */
     private int grantBigSize(int requested) {
-        int base = settings.getBasePacketSize();
-        MessageSender sender = messageSender;
-        long ceiling = Math.min(SharedConfig.MAX_BIG_PACKET_SIZE,
-                sender == null ? base : sender.maxSupportedFrameSize());
-        long wanted = Math.min(Math.max(requested, base), ceiling);
-        long delta = (wanted - base) - bigSizeReserved;
-        if (delta > 0) {
-            bigSizeReserved += netServer.reserveBigSizeBudget(delta);
+        synchronized (lifecycleMonitor) {
+            int base = settings.getBasePacketSize();
+            if (closed) {
+                return base;
+            }
+            MessageSender sender = messageSender;
+            long ceiling = Math.min(SharedConfig.MAX_BIG_PACKET_SIZE,
+                    sender == null ? base : sender.maxSupportedFrameSize());
+            long wanted = Math.min(Math.max(requested, base), ceiling);
+            long delta = (wanted - base) - bigSizeReserved;
+            if (delta > 0) {
+                bigSizeReserved += netServer.reserveBigSizeBudget(delta);
+            }
+            return (int) Math.min(wanted, base + bigSizeReserved);
         }
-        // the reservation is monotonic for receive capacity, the grant is not
-        return (int) Math.min(wanted, base + bigSizeReserved);
     }
 
     public synchronized boolean modeChangeAllowed() {
@@ -149,6 +175,7 @@ public class ClientOnServer implements ServerConnectionListener, IPacketHandler 
         }
         log.info("Dropping {} ({})", describe(), reason);
         close();
+        notifyDisconnected(reason);
     }
 
     public void disconnect() {
@@ -157,36 +184,116 @@ public class ClientOnServer implements ServerConnectionListener, IPacketHandler 
         }
         log.info("Dropping {}.", describe());
         close();
-
+        notifyDisconnected("Disconnected");
     }
 
     @Override
     public void onConnectionEstablished(MessageSender sender) {
-        this.messageSender = sender;
-        this.connected = true;
+        boolean rejected;
+        synchronized (lifecycleMonitor) {
+            rejected = closed || connected;
+            if(!rejected) {
+                messageSender = sender;
+                connected = true;
+            }
+        }
+        if(rejected) {
+            sender.close();
+            return;
+        }
+
         log.info("Client connected: {}", remoteId);
-        netServer.getEventHandler().onClientConnected(this);
+        netServer.trackConnection(this);
+        if(connected) {
+            netServer.getEventHandler().onClientConnected(this);
+        }
     }
 
     @Override
     public void onConnectionReceive(byte[] data) {
-        pipeline.decodeAndPassDown(data);
+        if(connected) {
+            pipeline.decodeAndPassDown(data);
+        }
     }
 
     @Override
     public void onConnectionClosed(String reason) {
         close();
-        netServer.getEventHandler().onClientDisconnected(this, reason);
+        notifyDisconnected(reason);
     }
 
     @Override
     public void onConnectionError(Throwable e) {
         log.error("Error on connection {}", describe(), e);
+        close();
+        notifyDisconnected("Connection error");
         netServer.getEventHandler().onClientError(this, e);
     }
 
-    private String describe() {
-        return claimedClientId != null ? claimedClientId + "/" + assignedId : remoteId;
+    public void setAuthenticated(boolean authenticated) {
+        ScheduledFuture<?> deadline = null;
+        synchronized (lifecycleMonitor) {
+            if(closed && authenticated) {
+                return;
+            }
+            this.authenticated = authenticated;
+            if(authenticated) {
+                deadline = takeHandshakeDeadline();
+            }
+        }
+        cancelDeadline(deadline);
+    }
+
+    public boolean completeAuthentication() {
+        ScheduledFuture<?> deadline;
+        synchronized (lifecycleMonitor) {
+            if(closed || !connected || authenticated) {
+                return false;
+            }
+            if(netServer.registerClient(this) == null) {
+                return false;
+            }
+            authenticated = true;
+            deadline = takeHandshakeDeadline();
+        }
+        cancelDeadline(deadline);
+        return true;
+    }
+
+    public boolean acceptPendingChallenge(byte[] challenge) {
+        synchronized (lifecycleMonitor) {
+            if(closed || !connected || authenticated) {
+                return false;
+            }
+            pendingChallenge = challenge;
+            return true;
+        }
+    }
+
+    void installHandshakeDeadline(ScheduledFuture<?> deadline) {
+        ScheduledFuture<?> deadlineToCancel = null;
+        synchronized (lifecycleMonitor) {
+            if(closed || !connected || authenticated) {
+                deadlineToCancel = deadline;
+            } else {
+                deadlineToCancel = handshakeDeadline;
+                handshakeDeadline = deadline;
+            }
+        }
+        cancelDeadline(deadlineToCancel);
+    }
+
+    void expireHandshake() {
+        CloseState closeState;
+        synchronized (lifecycleMonitor) {
+            if(authenticated || !connected || closed) {
+                return;
+            }
+            closeState = beginClose();
+        }
+        log.warn("Authentication handshake timed out for {} after {}ms", describe(), SharedConfig.AUTH_HANDSHAKE_TIMEOUT_MS);
+        finishClose(closeState);
+        notifyDisconnected("Authentication handshake timed out");
     }
 
     public String verifyCompatibility(C2SHelloPacket helloPacket) {
@@ -201,22 +308,68 @@ public class ClientOnServer implements ServerConnectionListener, IPacketHandler 
         return null;
     }
 
+    private String describe() {
+        return claimedClientId != null ? claimedClientId + "/" + assignedId : remoteId;
+    }
+
     private void close() {
-        connected = false;
-        if(messageSender != null) {
-            messageSender.close();
-        }
-        pipeline.close();
-
-        synchronized (this) {
-            if (bigSizeReserved > 0) {
-                netServer.releaseBigSizeBudget(bigSizeReserved);
-                bigSizeReserved = 0;
+        CloseState closeState;
+        synchronized (lifecycleMonitor) {
+            if(closed) {
+                return;
             }
+            closeState = beginClose();
         }
+        finishClose(closeState);
+    }
 
+    private CloseState beginClose() {
+        closed = true;
+        connected = false;
+        authenticated = false;
+        MessageSender sender = messageSender;
+        messageSender = null;
+        long reserved = bigSizeReserved;
+        bigSizeReserved = 0;
+        return new CloseState(sender, takeHandshakeDeadline(), reserved);
+    }
+
+    private void finishClose(CloseState closeState) {
+        cancelDeadline(closeState.deadline());
+        netServer.untrackConnection(this);
+        netServer.removeClient(this);
+        netServer.releaseBigSizeBudget(closeState.bigSizeReserved());
         try {
-            netServer.removeClient(this);
-        } catch (Exception ignored) {}
+            if(closeState.sender() != null) {
+                closeState.sender().close();
+            }
+        } finally {
+            pipeline.requestClose();
+        }
+    }
+
+    private ScheduledFuture<?> takeHandshakeDeadline() {
+        ScheduledFuture<?> deadline = handshakeDeadline;
+        handshakeDeadline = null;
+        return deadline;
+    }
+
+    private void notifyDisconnected(String reason) {
+        synchronized (lifecycleMonitor) {
+            if(disconnectedNotified) {
+                return;
+            }
+            disconnectedNotified = true;
+        }
+        netServer.getEventHandler().onClientDisconnected(this, reason);
+    }
+
+    private static void cancelDeadline(ScheduledFuture<?> deadline) {
+        if(deadline != null) {
+            deadline.cancel(false);
+        }
+    }
+
+    private record CloseState(MessageSender sender, ScheduledFuture<?> deadline, long bigSizeReserved) {
     }
 }

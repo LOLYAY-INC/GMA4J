@@ -9,27 +9,29 @@ import io.lolyay.gma4j.net.codec.encryption.server.IServerCertificateProvider;
 import io.lolyay.gma4j.net.codec.packet.GMAPacket;
 import io.lolyay.gma4j.net.server.ServerEventHandler;
 import io.lolyay.gma4j.net.server.transport.ServerTransportManager;
+import io.lolyay.gma4j.net.shared.SharedConfig;
 import io.lolyay.gma4j.net.transport.IServerTransport;
 import io.lolyay.gma4j.net.transport.IServerTransportFactory;
 import io.lolyay.gma4j.net.transport.ServerTransportData;
 import io.lolyay.gma4j.net.transport.TransportManager;
 import lombok.AccessLevel;
 import lombok.Getter;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
-import io.lolyay.gma4j.net.shared.SharedConfig;
-
 @Slf4j
-@RequiredArgsConstructor
 @Getter
 public class GMA4JNetServer implements ServerClientHandler {
     private final ServerEventHandler eventHandler;
@@ -42,22 +44,62 @@ public class GMA4JNetServer implements ServerClientHandler {
     @Getter(AccessLevel.NONE)
     private final Map<String, ClientOnServer> clientsByClaimedId = new ConcurrentHashMap<>();
     @Getter(AccessLevel.NONE)
+    private final Set<ClientOnServer> connections = ConcurrentHashMap.newKeySet();
+    @Getter(AccessLevel.NONE)
+    private final Object lifecycleMonitor = new Object();
+    @Getter(AccessLevel.NONE)
     private final AtomicLong bigSizeBudgetUsed = new AtomicLong();
 
-    private IServerTransport transport;
+    @Getter(AccessLevel.NONE)
+    private ScheduledExecutorService handshakeScheduler;
+    @Getter(AccessLevel.NONE)
+    private volatile boolean acceptingConnections = true;
+    private volatile IServerTransport transport;
+
+    public GMA4JNetServer(ServerEventHandler eventHandler,
+                          IServerCertificateProvider certificateProvider,
+                          Map<GmaAuthType, GmaAuthServer> authServers,
+                          CodecRegistry codecRegistry) {
+        this.eventHandler = eventHandler;
+        this.certificateProvider = certificateProvider;
+        this.authServers = authServers;
+        this.codecRegistry = codecRegistry;
+        this.handshakeScheduler = createHandshakeScheduler();
+    }
 
     public void start(ServerTransportData data, String scheme) {
         ServerTransportManager.register();
         IServerTransportFactory factory = TransportManager.serverFactoryFor(scheme);
-        transport = factory.create(data, this);
+        IServerTransport newTransport;
+        synchronized (lifecycleMonitor) {
+            if (handshakeScheduler.isShutdown()) {
+                handshakeScheduler = createHandshakeScheduler();
+            }
+            acceptingConnections = true;
+            newTransport = factory.create(data, this);
+            transport = newTransport;
+        }
         codecRegistry.warmup();
-        transport.start();
+        newTransport.start();
         log.info("GMA4J server listening on {}:{} ({})", data.host(), data.port(), scheme);
     }
 
     public void stop() {
-        if(transport != null) {
-            transport.stop();
+        IServerTransport currentTransport;
+        synchronized (lifecycleMonitor) {
+            acceptingConnections = false;
+            currentTransport = transport;
+            transport = null;
+            handshakeScheduler.shutdownNow();
+        }
+
+        closeConnections("Server stopped");
+        try {
+            if(currentTransport != null) {
+                currentTransport.stop();
+            }
+        } finally {
+            closeConnections("Server stopped");
         }
     }
 
@@ -72,6 +114,39 @@ public class GMA4JNetServer implements ServerClientHandler {
 
     public GmaAuthServer getAuthServer(GmaAuthType type) {
         return authServers.get(type);
+    }
+
+    void trackConnection(ClientOnServer client) {
+        ScheduledFuture<?> deadline = null;
+        boolean admitted = false;
+        synchronized (lifecycleMonitor) {
+            // the tracked set is the live connection count, so it also caps admission
+            if(acceptingConnections && !handshakeScheduler.isShutdown()
+                    && connections.size() < SharedConfig.MAX_CONNECTIONS) {
+                connections.add(client);
+                admitted = true;
+                deadline = handshakeScheduler.schedule(
+                        client::expireHandshake,
+                        SharedConfig.AUTH_HANDSHAKE_TIMEOUT_MS,
+                        TimeUnit.MILLISECONDS
+                );
+            }
+        }
+
+        if(!admitted) {
+            client.disconnect("Server is not accepting connections");
+            return;
+        }
+        client.installHandshakeDeadline(deadline);
+        if (!client.isConnected()) {
+            connections.remove(client);
+        }
+    }
+
+    void untrackConnection(ClientOnServer client) {
+        synchronized (lifecycleMonitor) {
+            connections.remove(client);
+        }
     }
 
     public synchronized UUID registerClient(ClientOnServer client) {
@@ -122,6 +197,16 @@ public class GMA4JNetServer implements ServerClientHandler {
         }
     }
 
+    private void closeConnections(String reason) {
+        for(ClientOnServer client : List.copyOf(connections)) {
+            try {
+                client.disconnect(reason);
+            } catch (RuntimeException exception) {
+                log.warn("Failed to close connection {}", client.getRemoteId(), exception);
+            }
+        }
+    }
+
     /** Takes as much of wanted as the global budget still holds */
     public long reserveBigSizeBudget(long wanted) {
         while (true) {
@@ -134,6 +219,17 @@ public class GMA4JNetServer implements ServerClientHandler {
                 return take;
             }
         }
+    }
+
+    private static ScheduledExecutorService createHandshakeScheduler() {
+        ScheduledThreadPoolExecutor scheduler = new ScheduledThreadPoolExecutor(1, runnable -> {
+            Thread thread = new Thread(runnable, "gma4j-server-handshake-deadline");
+            thread.setDaemon(true);
+            return thread;
+        });
+        scheduler.setRemoveOnCancelPolicy(true);
+        scheduler.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
+        return scheduler;
     }
 
     public void releaseBigSizeBudget(long amount) {
