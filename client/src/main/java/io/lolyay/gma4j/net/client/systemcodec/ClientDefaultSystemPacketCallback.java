@@ -8,6 +8,7 @@ import io.lolyay.gma4j.net.codec.systemcodec.c2s.C2SAuthPacket;
 import io.lolyay.gma4j.net.codec.systemcodec.c2s.C2SAuthResponsePacket;
 import io.lolyay.gma4j.net.codec.systemcodec.callbacks.SystemPacketCallback;
 import io.lolyay.gma4j.net.codec.systemcodec.s2c.*;
+import io.lolyay.gma4j.net.shared.SharedConfig;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -31,6 +32,11 @@ public class ClientDefaultSystemPacketCallback implements SystemPacketCallback {
             return;
         }
 
+        if(packet instanceof S2CModeStatusPacket modeStatusPacket) {
+            onModeStatus(modeStatusPacket);
+            return;
+        }
+
         if(netClient.isAuthenticated()) {
             if(netClient.getParent().allowReAuth)
                 log.info("Reauthenticating");
@@ -47,6 +53,26 @@ public class ClientDefaultSystemPacketCallback implements SystemPacketCallback {
             case S2CAuthStatusPacket s2CAuthStatusPacket -> onAuthStatus(s2CAuthStatusPacket);
             default -> throw new IllegalStateException("Unexpected value: " + packet);
         }
+    }
+
+    private void onModeStatus(S2CModeStatusPacket packet) {
+        if(!netClient.isAuthenticated()) {
+            netClient.disconnectWithError(new Exception("Mode status before auth"));
+            return;
+        }
+        if(packet.maxPacketSize() < 0
+                || (packet.bigSize() && (packet.maxPacketSize() <= netClient.getConnectionSettings().getBasePacketSize()
+                        || packet.maxPacketSize() > SharedConfig.MAX_BIG_PACKET_SIZE))) {
+            netClient.disconnectWithError(new Exception("Invalid mode grant size: " + packet.maxPacketSize()));
+            return;
+        }
+        if(packet.bigSize() && packet.maxPacketSize() > netClient.getServerConnection().maxSupportedFrameSize()) {
+            netClient.disconnectWithError(new Exception("Mode grant exceeds transport frame cap: " + packet.maxPacketSize()));
+            return;
+        }
+        log.info("Modes granted: lowLatency={}, bigSize={}, maxPacketSize={}",
+                packet.lowLatency(), packet.bigSize(), packet.maxPacketSize());
+        netClient.applyModes(packet.lowLatency(), packet.bigSize(), packet.maxPacketSize());
     }
 
     protected void onAuthStatus(S2CAuthStatusPacket authStatusPacket) {

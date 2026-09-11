@@ -10,6 +10,7 @@ import io.lolyay.gma4j.net.codec.systemcodec.c2s.C2SAuthPacket;
 import io.lolyay.gma4j.net.codec.systemcodec.c2s.C2SAuthResponsePacket;
 import io.lolyay.gma4j.net.codec.systemcodec.c2s.C2SHelloPacket;
 import io.lolyay.gma4j.net.codec.systemcodec.c2s.C2SKeepAlivePacket;
+import io.lolyay.gma4j.net.codec.systemcodec.c2s.C2SModeRequestPacket;
 import io.lolyay.gma4j.net.codec.systemcodec.callbacks.SystemPacketCallback;
 import io.lolyay.gma4j.net.codec.systemcodec.s2c.*;
 import io.lolyay.gma4j.net.server.net.ClientOnServer;
@@ -28,6 +29,11 @@ public class ServerDefaultSystemPacketCallback implements SystemPacketCallback {
     public <T extends GMAPacket<T>> void onSystemPacket(T packet) {
         if(packet instanceof C2SKeepAlivePacket(long id)) {
             client.send(new S2CKeepAlivePacket(id));
+            return;
+        }
+
+        if(packet instanceof C2SModeRequestPacket modeRequestPacket) {
+            onC2SModeRequest(modeRequestPacket);
             return;
         }
 
@@ -174,5 +180,21 @@ public class ServerDefaultSystemPacketCallback implements SystemPacketCallback {
         client.send(new S2CAuthStatusPacket(true));
         log.info("Client authenticated: {} ({})", client.getClaimedClientId(), client.getAssignedId());
         client.getNetServer().getEventHandler().onClientAuthenticated(client);
+    }
+
+    private void onC2SModeRequest(C2SModeRequestPacket packet) {
+        if(!client.isAuthenticated()) {
+            client.disconnect("Mode request before auth");
+            return;
+        }
+        if(packet.requestedMaxPacketSize() < 0) {
+            client.disconnect("Negative mode packet size");
+            return;
+        }
+        if(!client.modeChangeAllowed()) {
+            log.warn("Rate limited mode request from {}", client.getClaimedClientId());
+            return;
+        }
+        client.setModes(packet.lowLatency(), packet.bigSize(), packet.requestedMaxPacketSize());
     }
 }

@@ -6,6 +6,7 @@ import io.lolyay.gma4j.net.codec.systemcodec.c2s.C2SAuthPacket;
 import io.lolyay.gma4j.net.codec.systemcodec.c2s.C2SAuthResponsePacket;
 import io.lolyay.gma4j.net.codec.systemcodec.c2s.C2SHelloPacket;
 import io.lolyay.gma4j.net.codec.systemcodec.c2s.C2SKeepAlivePacket;
+import io.lolyay.gma4j.net.codec.systemcodec.c2s.C2SModeRequestPacket;
 import io.lolyay.gma4j.net.codec.systemcodec.s2c.*;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import lombok.Getter;
@@ -46,6 +47,14 @@ public class SystemCodec {
 
     public static final PacketType<S2CCodecStateUpdatePacket> S_2_C_CODEC_STATE_UPDATE =
             register(new PacketType<>(8, S2CCodecStateUpdatePacket.CODEC));
+
+
+    // Connection modes
+    public static final PacketType<C2SModeRequestPacket> C_2_S_MODE_REQUEST_PACKET =
+            register(new PacketType<>(9, C2SModeRequestPacket.CODEC));
+
+    public static final PacketType<S2CModeStatusPacket> S_2_C_MODE_STATUS_PACKET =
+            register(new PacketType<>(10, S2CModeStatusPacket.CODEC));
 
 
 

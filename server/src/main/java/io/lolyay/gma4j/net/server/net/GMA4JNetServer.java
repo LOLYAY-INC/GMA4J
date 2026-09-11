@@ -24,6 +24,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
+
+import io.lolyay.gma4j.net.shared.SharedConfig;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -38,6 +41,8 @@ public class GMA4JNetServer implements ServerClientHandler {
     private final Map<UUID, ClientOnServer> clientsById = new ConcurrentHashMap<>();
     @Getter(AccessLevel.NONE)
     private final Map<String, ClientOnServer> clientsByClaimedId = new ConcurrentHashMap<>();
+    @Getter(AccessLevel.NONE)
+    private final AtomicLong bigSizeBudgetUsed = new AtomicLong();
 
     private IServerTransport transport;
 
@@ -115,5 +120,23 @@ public class GMA4JNetServer implements ServerClientHandler {
         for(ClientOnServer client : clientsById.values()) {
             client.send(packet);
         }
+    }
+
+    /** Takes as much of wanted as the global budget still holds */
+    public long reserveBigSizeBudget(long wanted) {
+        while (true) {
+            long used = bigSizeBudgetUsed.get();
+            long take = Math.min(wanted, Math.max(0, SharedConfig.BIG_SIZE_TOTAL_BUDGET - used));
+            if (take <= 0) {
+                return 0;
+            }
+            if (bigSizeBudgetUsed.compareAndSet(used, used + take)) {
+                return take;
+            }
+        }
+    }
+
+    public void releaseBigSizeBudget(long amount) {
+        bigSizeBudgetUsed.addAndGet(-amount);
     }
 }

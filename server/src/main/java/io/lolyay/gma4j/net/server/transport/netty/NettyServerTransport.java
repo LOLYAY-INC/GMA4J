@@ -40,10 +40,11 @@ public class NettyServerTransport implements IServerTransport {
                 .childHandler(new ChannelInitializer<SocketChannel>() {
                     @Override
                     protected void initChannel(SocketChannel ch) {
+                        NettyServerHandler handler = new NettyServerHandler(clientHandler);
                         ch.pipeline()
-                                .addLast("frameDecoder", new LimitedVarint32FrameDecoder())
+                                .addLast("frameDecoder", new LimitedVarint32FrameDecoder(handler::currentFrameLimit))
                                 .addLast("frameEncoder", new ProtobufVarint32LengthFieldPrepender())
-                                .addLast("handler", new NettyServerHandler(clientHandler));
+                                .addLast("handler", handler);
                     }
                 });
 
