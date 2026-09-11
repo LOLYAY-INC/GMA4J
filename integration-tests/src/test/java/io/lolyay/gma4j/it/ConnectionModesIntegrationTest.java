@@ -92,8 +92,11 @@ class ConnectionModesIntegrationTest {
             assertTrue(serverGrant.await(5, TimeUnit.SECONDS));
             assertTrue(handler.errors.get() == null, () -> "Client error: " + handler.errors.get());
         } finally {
-            assertDoesNotThrow(client::disconnect);
-            assertDoesNotThrow(server::stop);
+            try {
+                assertDoesNotThrow(client::disconnect);
+            } finally {
+                assertDoesNotThrow(server::stop);
+            }
         }
     }
 
@@ -119,8 +122,11 @@ class ConnectionModesIntegrationTest {
             assertFalse(handler.grantedBigSize, "big size must not be granted over ws");
             assertEquals(SharedConfig.MAX_PACKET_SIZE, handler.grantedMaxPacketSize);
         } finally {
-            assertDoesNotThrow(client::disconnect);
-            assertDoesNotThrow(server::stop);
+            try {
+                assertDoesNotThrow(client::disconnect);
+            } finally {
+                assertDoesNotThrow(server::stop);
+            }
         }
     }
 
@@ -157,8 +163,11 @@ class ConnectionModesIntegrationTest {
             }
             assertTrue(serverDropped.await(20, TimeUnit.SECONDS), "flood did not disconnect");
         } finally {
-            assertDoesNotThrow(client::disconnect);
-            assertDoesNotThrow(server::stop);
+            try {
+                assertDoesNotThrow(client::disconnect);
+            } finally {
+                assertDoesNotThrow(server::stop);
+            }
         }
     }
 

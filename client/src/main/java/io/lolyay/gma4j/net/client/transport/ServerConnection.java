@@ -53,6 +53,12 @@ public class ServerConnection implements ClientConnectionListener { // client ha
         }
     }
 
+    /** Base size until the transport is up */
+    public int maxSupportedFrameSize() {
+        MessageSender sender = messageSender;
+        return sender == null ? settings.getBasePacketSize() : sender.maxSupportedFrameSize();
+    }
+
     @Override
     public int maxIncomingFrameSize() {
         return settings.receiveAllowance();

@@ -64,6 +64,10 @@ public class ClientDefaultSystemPacketCallback implements SystemPacketCallback {
             netClient.disconnectWithError(new Exception("Invalid mode grant size: " + packet.maxPacketSize()));
             return;
         }
+        if(packet.bigSize() && packet.maxPacketSize() > netClient.getServerConnection().maxSupportedFrameSize()) {
+            netClient.disconnectWithError(new Exception("Mode grant exceeds transport frame cap: " + packet.maxPacketSize()));
+            return;
+        }
         log.info("Modes granted: lowLatency={}, bigSize={}, maxPacketSize={}",
                 packet.lowLatency(), packet.bigSize(), packet.maxPacketSize());
         netClient.applyModes(packet.lowLatency(), packet.bigSize(), packet.maxPacketSize());
