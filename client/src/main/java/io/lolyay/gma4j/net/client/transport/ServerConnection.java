@@ -28,6 +28,7 @@ public class ServerConnection implements ClientConnectionListener { // client ha
 
     private final String clientClaimedStringId;
     private final String uri;
+    private final long sessionToken;
 
     private volatile MessageSender messageSender;
 
@@ -113,17 +114,23 @@ public class ServerConnection implements ClientConnectionListener { // client ha
     @Override
     public void onConnectionClosed(String reason) {
         log.info("Connection closed with {}", uri);
-        connectionStateCallback.onConnectionClosed(reason);
         isConnected = false;
-        netClient.onRemoteDisconnect();
+        try {
+            connectionStateCallback.onConnectionClosed(reason);
+        } finally {
+            netClient.onRemoteDisconnect(sessionToken);
+        }
     }
 
     @Override
     public void onConnectionError(Throwable e) {
         log.error("Error in the connection to {}", uri, e);
         isConnected = false;
-        connectionStateCallback.onConnectionError(e);
-        netClient.onRemoteDisconnect();
+        try {
+            connectionStateCallback.onConnectionError(e);
+        } finally {
+            netClient.onRemoteDisconnect(sessionToken);
+        }
     }
 
     @Override

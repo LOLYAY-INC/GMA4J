@@ -128,10 +128,14 @@ public final class ByteReader {
         int shift = 0;
         byte b;
         do {
-            if (shift >= 35) {
+            if (shift >= 32) {
                 throw new IndexOutOfBoundsException("VarInt too long");
             }
             b = readByte();
+            // fifth byte only carries bits 28-31, anything higher would overflow
+            if (shift == 28 && (b & 0x70) != 0) {
+                throw new IndexOutOfBoundsException("VarInt overflow");
+            }
             result |= (b & 0x7F) << shift;
             shift += 7;
         } while ((b & 0x80) != 0);
@@ -143,10 +147,14 @@ public final class ByteReader {
         int shift = 0;
         byte b;
         do {
-            if (shift >= 70) {
+            if (shift >= 64) {
                 throw new IndexOutOfBoundsException("VarLong too long");
             }
             b = readByte();
+            // tenth byte only carries bit 63, anything higher would overflow
+            if (shift == 63 && (b & 0x7E) != 0) {
+                throw new IndexOutOfBoundsException("VarLong overflow");
+            }
             result |= (long) (b & 0x7F) << shift;
             shift += 7;
         } while ((b & 0x80) != 0);

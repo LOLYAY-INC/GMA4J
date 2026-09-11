@@ -9,6 +9,7 @@ import io.netty.channel.ChannelOption;
 import io.netty.channel.WriteBufferWaterMark;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -50,7 +51,12 @@ public class NettyServerConnection implements MessageSender {
         } else if (channel.eventLoop().inEventLoop()) {
             writeCoalesced(data, done);
         } else {
-            channel.eventLoop().execute(() -> writeCoalesced(data, done));
+            try {
+                channel.eventLoop().execute(() -> writeCoalesced(data, done));
+            } catch (RejectedExecutionException e) {
+                queuedBytes.addAndGet(-data.length);
+                done.completeExceptionally(e);
+            }
         }
         return done;
     }

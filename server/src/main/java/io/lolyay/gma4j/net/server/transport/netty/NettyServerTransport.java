@@ -13,6 +13,7 @@ import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.codec.protobuf.ProtobufVarint32LengthFieldPrepender;
+import io.netty.util.concurrent.Future;
 
 public class NettyServerTransport implements IServerTransport {
 
@@ -53,14 +54,17 @@ public class NettyServerTransport implements IServerTransport {
 
     @Override
     public void stop() {
+        // close listener then drain child channels so channelInactive releases every admission slot
         if (serverChannel != null) {
-            serverChannel.close();
+            serverChannel.close().awaitUninterruptibly();
         }
-        if (workerGroup != null) {
-            workerGroup.shutdownGracefully();
+        Future<?> worker = workerGroup != null ? workerGroup.shutdownGracefully() : null;
+        Future<?> boss = bossGroup != null ? bossGroup.shutdownGracefully() : null;
+        if (worker != null) {
+            worker.awaitUninterruptibly();
         }
-        if (bossGroup != null) {
-            bossGroup.shutdownGracefully();
+        if (boss != null) {
+            boss.awaitUninterruptibly();
         }
     }
 }

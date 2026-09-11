@@ -38,6 +38,19 @@ class ByteReaderTest {
     }
 
     @Test
+    void varIntFifthByteOverflowBitsRejected() {
+        // valid four groups then bits above 0x0F in the last byte must not silently truncate
+        assertThrows(IndexOutOfBoundsException.class,
+                () -> reader(0x80, 0x80, 0x80, 0x80, 0x10).readVarInt());
+    }
+
+    @Test
+    void varLongTenthByteOverflowBitsRejected() {
+        assertThrows(IndexOutOfBoundsException.class,
+                () -> reader(0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x02).readVarLong());
+    }
+
+    @Test
     void varIntFiveByteNegativeRoundTrips() {
         assertEquals(-1, new ByteReader(varInt(-1)).readVarInt());
         assertEquals(Integer.MIN_VALUE, new ByteReader(varInt(Integer.MIN_VALUE)).readVarInt());

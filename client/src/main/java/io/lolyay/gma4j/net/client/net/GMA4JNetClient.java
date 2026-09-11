@@ -64,12 +64,15 @@ public class GMA4JNetClient {
     private long keepAliveId = 0;
     @Getter(AccessLevel.NONE)
     private volatile AtomicBoolean sessionClosed;
+    @Getter(AccessLevel.NONE)
+    private volatile long sessionToken;
 
     private void prepare(String uri) {
         IClientTransportFactory transportFactory = TransportManager.clientFactoryFor(URI.create(uri));
         this.clientEncryptionState = new ClientEncryptionState(knownCertificateKeeper);
         this.authenticated = false;
         this.sessionClosed = new AtomicBoolean(false);
+        long token = ++sessionToken;
         this.scheduler = Executors.newSingleThreadScheduledExecutor(runnable -> {
             Thread thread = new Thread(runnable, "gma4j-client-scheduler");
             thread.setDaemon(true);
@@ -84,7 +87,7 @@ public class GMA4JNetClient {
                 connectionSettings,
                 () -> authenticated
         );
-        this.serverConnection = new ServerConnection(this, pipeline, connectionSettings, packetHandler, claimedClientId, uri);
+        this.serverConnection = new ServerConnection(this, pipeline, connectionSettings, packetHandler, claimedClientId, uri, token);
 
         transport = transportFactory.create(serverConnection);
         codecRegistry.warmup();
@@ -138,10 +141,10 @@ public class GMA4JNetClient {
         send(new C2SKeepAlivePacket(keepAliveId++));
     }
 
-    public void disconnect() {
+    public boolean disconnect() {
         AtomicBoolean closed = sessionClosed;
         if(closed != null && !closed.compareAndSet(false, true)) {
-            return;
+            return false;
         }
         if(handshakeTimeout != null) {
             handshakeTimeout.cancel(false);
@@ -158,10 +161,15 @@ public class GMA4JNetClient {
         if(pipeline != null) {
             pipeline.close();
         }
+        return true;
     }
 
     /** Remote closes and transport errors must also stop timers and the scheduler */
-    public void onRemoteDisconnect() {
+    public void onRemoteDisconnect(long token) {
+        // a late callback from a transport we already replaced must not touch the new session
+        if(token != sessionToken) {
+            return;
+        }
         disconnect();
     }
 
@@ -171,10 +179,8 @@ public class GMA4JNetClient {
     }
 
     public void disconnectWithError(Exception e) {
-        AtomicBoolean closed = sessionClosed;
-        boolean wasOpen = closed == null || !closed.get();
-        disconnect();
-        if(wasOpen) {
+        // only the caller that actually closed the session notifies the handler
+        if(disconnect()) {
             packetHandler.onConnectionError(e);
         }
     }
