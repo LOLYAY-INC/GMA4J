@@ -16,6 +16,7 @@ public class TestCodecs {
         registry.addCodec(BinaryPacket.TYPE);
         registry.addCodec(TinyPacket.TYPE);
         registry.addCodec(GatedPacket.TYPE);
+        registry.addCodec(IncompressiblePacket.TYPE);
         registry.warmup();
     }
 }

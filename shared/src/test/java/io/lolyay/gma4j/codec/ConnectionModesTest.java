@@ -5,7 +5,6 @@ import io.lolyay.gma4j.codec.fixtures.ComplexPacket;
 import io.lolyay.gma4j.codec.fixtures.LargeJsonPacket;
 import io.lolyay.gma4j.codec.fixtures.TestCodecs;
 import io.lolyay.gma4j.codec.fixtures.TinyPacket;
-import io.lolyay.gma4j.net.codec.CodecRegistry;
 import io.lolyay.gma4j.net.codec.CompressionUtil;
 import io.lolyay.gma4j.net.codec.PacketCodingException;
 import io.lolyay.gma4j.net.codec.PacketFlags;

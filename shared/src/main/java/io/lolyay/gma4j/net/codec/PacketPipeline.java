@@ -257,7 +257,8 @@ public class PacketPipeline {
         // low latency trades bandwidth for the compression stall
         if (!settings.isLowLatency()
                 && payload.length >= SharedConfig.PACKET_COMPRESSION_THRESHOLD
-                && SharedConfig.PACKET_COMPRESSION_ENABLED) {
+                && SharedConfig.PACKET_COMPRESSION_ENABLED
+                && packet.getPacketType().shouldCompress(packet)) {
             int uncompressedLength = payload.length;
             try {
                 byte[] compressedPayload = CompressionUtil.compress(payload);
