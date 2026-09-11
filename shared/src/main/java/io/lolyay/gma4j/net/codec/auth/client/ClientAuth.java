@@ -15,6 +15,10 @@ public final class ClientAuth {
         return GmaApiKeyAuth.of(apiKey);
     }
 
+    public static GmaAuthClient jwt(String jwt) {
+        return GmaJWTAuth.of(jwt);
+    }
+
 
     public static GmaAuthClient hmac(String secret) {
         return GmaHMACKeyAuth.of(secret);

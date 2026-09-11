@@ -20,10 +20,10 @@ public class GmaMultiClientHmacAuthServer implements GmaAuthServer {
     private final static SecureRandom random = new SecureRandom();
     private final Map<String, byte[]> secret;
 
-    public GmaMultiClientHmacAuthServer(Map<String, String> secret) {
+    public static GmaMultiClientHmacAuthServer ofUTF(Map<String, String> secret) {
         Map<String, byte[]> secrets = new HashMap<>();
         secret.forEach((k, v) -> secrets.put(k, v.getBytes(StandardCharsets.UTF_8)));
-        this.secret = secrets;
+        return new GmaMultiClientHmacAuthServer(secrets);
     }
 
     public GmaMultiClientHmacAuthServer(Map<String, byte[]> secret) {
