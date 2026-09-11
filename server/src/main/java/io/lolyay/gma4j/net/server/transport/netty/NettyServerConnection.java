@@ -1,17 +1,22 @@
 package io.lolyay.gma4j.net.server.transport.netty;
 
 import io.lolyay.gma4j.net.codec.connection.MessageSender;
+import io.lolyay.gma4j.net.shared.SharedConfig;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
+import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.WriteBufferWaterMark;
 
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class NettyServerConnection implements MessageSender {
 
     private final Channel channel;
     private final AtomicBoolean flushPending = new AtomicBoolean();
+    private final AtomicLong queuedBytes = new AtomicLong();
     private volatile boolean coalesceFlush;
 
     public NettyServerConnection(Channel channel) {
@@ -25,17 +30,29 @@ public class NettyServerConnection implements MessageSender {
 
     @Override
     public boolean send(byte[] data, boolean urgent) {
+        return !sendWithCompletion(data, urgent).isCompletedExceptionally();
+    }
+
+    @Override
+    public CompletableFuture<Void> sendWithCompletion(byte[] data, boolean urgent) {
         if (!channel.isActive()) {
-            return false;
+            return CompletableFuture.failedFuture(new IllegalStateException("Channel is not active"));
         }
+        long queued = queuedBytes.addAndGet(data.length);
+        if (queued > SharedConfig.MAX_QUEUED_WRITE_BYTES) {
+            queuedBytes.addAndGet(-data.length);
+            return CompletableFuture.failedFuture(new IllegalStateException(
+                    "Send queue full: " + queued + " > " + SharedConfig.MAX_QUEUED_WRITE_BYTES));
+        }
+        CompletableFuture<Void> done = new CompletableFuture<>();
         if (urgent || !coalesceFlush) {
-            channel.writeAndFlush(Unpooled.wrappedBuffer(data));
+            track(channel.writeAndFlush(Unpooled.wrappedBuffer(data)), data.length, done);
         } else if (channel.eventLoop().inEventLoop()) {
-            writeCoalesced(data);
+            writeCoalesced(data, done);
         } else {
-            channel.eventLoop().execute(() -> writeCoalesced(data));
+            channel.eventLoop().execute(() -> writeCoalesced(data, done));
         }
-        return true;
+        return done;
     }
 
     @Override
@@ -48,14 +65,25 @@ public class NettyServerConnection implements MessageSender {
     }
 
     /** Write and flush scheduling stay on the event loop so no write can miss its flush */
-    private void writeCoalesced(byte[] data) {
-        channel.write(Unpooled.wrappedBuffer(data));
+    private void writeCoalesced(byte[] data, CompletableFuture<Void> done) {
+        track(channel.write(Unpooled.wrappedBuffer(data)), data.length, done);
         if (flushPending.compareAndSet(false, true)) {
             channel.eventLoop().execute(() -> {
                 flushPending.set(false);
                 channel.flush();
             });
         }
+    }
+
+    private void track(ChannelFuture future, int size, CompletableFuture<Void> done) {
+        future.addListener(f -> {
+            queuedBytes.addAndGet(-size);
+            if (f.isSuccess()) {
+                done.complete(null);
+            } else {
+                done.completeExceptionally(f.cause());
+            }
+        });
     }
 
     @Override

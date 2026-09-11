@@ -25,8 +25,8 @@ public final class ByteReader {
     public <T extends Enum<T>> List<T> readPrefixedEnumArray(Class<T> enumType, int max) {
         List<T> list = new ObjectArrayList<>();
         int size = readVarInt();
-        if (size > max) {
-            throw new IndexOutOfBoundsException("Too big PrefixedEnumArray: " + size + " > " + max + " max");
+        if (size < 0 || size > max) {
+            throw new IndexOutOfBoundsException("Bad PrefixedEnumArray size: " + size + " (max " + max + ")");
         }
         for (int i = 0; i < size; i++) {
             list.add(enumType.getEnumConstants()[readByte() & 0xFF]);
@@ -42,6 +42,10 @@ public final class ByteReader {
     public <T> List<T> readPrefixedArray(Supplier<T> reader) {
         List<T> list = new ObjectArrayList<>();
         int size = readVarInt();
+        // every element consumes at least one byte, so remaining bytes bound the count
+        if (size < 0 || size > end - pos) {
+            throw new IndexOutOfBoundsException("Bad PrefixedArray size: " + size);
+        }
         for (int i = 0; i < size; i++) {
             list.add(reader.get());
         }
@@ -50,8 +54,8 @@ public final class ByteReader {
 
     public byte[] readPrefixedBytes(int max) {
         int size = readVarInt();
-        if (size > max) {
-            throw new IndexOutOfBoundsException("Too big PrefixedBytes: " + size + " > " + max + " max");
+        if (size < 0 || size > max) {
+            throw new IndexOutOfBoundsException("Bad PrefixedBytes size: " + size + " (max " + max + ")");
         }
         return readBytes(size);
     }
@@ -101,7 +105,7 @@ public final class ByteReader {
     }
 
     public void readBytes(byte[] dst) {
-        if (pos + dst.length > end) {
+        if (dst.length > end - pos) {
             throw new IndexOutOfBoundsException("ByteReader underflow");
         }
         System.arraycopy(buf, pos, dst, 0, dst.length);
@@ -109,12 +113,13 @@ public final class ByteReader {
     }
 
     public byte[] readBytes(int length) {
-        byte[] dst = new byte[length];
-        if (pos + dst.length > end) {
-            throw new IndexOutOfBoundsException("ByteReader underflow");
+        // bounds first, a hostile length must not allocate
+        if (length < 0 || length > end - pos) {
+            throw new IndexOutOfBoundsException("ByteReader underflow: " + length + " bytes requested");
         }
-        System.arraycopy(buf, pos, dst, 0, dst.length);
-        pos += dst.length;
+        byte[] dst = new byte[length];
+        System.arraycopy(buf, pos, dst, 0, length);
+        pos += length;
         return dst;
     }
 
@@ -123,6 +128,9 @@ public final class ByteReader {
         int shift = 0;
         byte b;
         do {
+            if (shift >= 35) {
+                throw new IndexOutOfBoundsException("VarInt too long");
+            }
             b = readByte();
             result |= (b & 0x7F) << shift;
             shift += 7;
@@ -135,6 +143,9 @@ public final class ByteReader {
         int shift = 0;
         byte b;
         do {
+            if (shift >= 70) {
+                throw new IndexOutOfBoundsException("VarLong too long");
+            }
             b = readByte();
             result |= (long) (b & 0x7F) << shift;
             shift += 7;

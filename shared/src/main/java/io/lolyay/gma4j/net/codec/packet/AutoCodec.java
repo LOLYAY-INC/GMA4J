@@ -2,6 +2,7 @@ package io.lolyay.gma4j.net.codec.packet;
 
 import io.lolyay.gma4j.net.shared.CodecHasher;
 import io.lolyay.gma4j.net.shared.CodecType;
+import io.lolyay.gma4j.net.shared.GsonUtil;
 import io.lolyay.gma4j.net.shared.SharedConfig;
 import io.lolyay.gma4j.net.shared.excp.NoCodecException;
 import lombok.SneakyThrows;
@@ -36,7 +37,7 @@ public final class AutoCodec<T extends GMAPacket<T>> extends ImplCodec<T> implem
     }
 
     private T jsonD(byte[] data) {
-        return GSON.fromJson(new String(data, StandardCharsets.UTF_8), getClazz());
+        return GsonUtil.fromJsonBounded(new String(data, StandardCharsets.UTF_8), getClazz());
     }
 
     @SneakyThrows

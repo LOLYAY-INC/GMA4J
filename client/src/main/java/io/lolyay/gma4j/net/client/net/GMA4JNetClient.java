@@ -28,6 +28,7 @@ import java.net.URI;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @RequiredArgsConstructor
 @Getter
@@ -61,11 +62,14 @@ public class GMA4JNetClient {
     private ScheduledFuture<?> keepAliveTask;
     @Getter(AccessLevel.NONE)
     private long keepAliveId = 0;
+    @Getter(AccessLevel.NONE)
+    private volatile AtomicBoolean sessionClosed;
 
     private void prepare(String uri) {
         IClientTransportFactory transportFactory = TransportManager.clientFactoryFor(URI.create(uri));
         this.clientEncryptionState = new ClientEncryptionState(knownCertificateKeeper);
         this.authenticated = false;
+        this.sessionClosed = new AtomicBoolean(false);
         this.scheduler = Executors.newSingleThreadScheduledExecutor(runnable -> {
             Thread thread = new Thread(runnable, "gma4j-client-scheduler");
             thread.setDaemon(true);
@@ -77,7 +81,8 @@ public class GMA4JNetClient {
                 new PacketDistributorImpl(
                         new ClientDefaultSystemPacketCallback(this),
                         packetHandler,() -> authenticated),
-                connectionSettings
+                connectionSettings,
+                () -> authenticated
         );
         this.serverConnection = new ServerConnection(this, pipeline, connectionSettings, packetHandler, claimedClientId, uri);
 
@@ -86,8 +91,8 @@ public class GMA4JNetClient {
     }
 
     public void connect(String uri) {
-
-        if(serverConnection != null && serverConnection.isConnected()) {
+        // dispose whatever a previous connect left behind, timers included
+        if(sessionClosed != null) {
             disconnect();
         }
         prepare(uri);
@@ -134,6 +139,10 @@ public class GMA4JNetClient {
     }
 
     public void disconnect() {
+        AtomicBoolean closed = sessionClosed;
+        if(closed != null && !closed.compareAndSet(false, true)) {
+            return;
+        }
         if(handshakeTimeout != null) {
             handshakeTimeout.cancel(false);
         }
@@ -151,14 +160,23 @@ public class GMA4JNetClient {
         }
     }
 
+    /** Remote closes and transport errors must also stop timers and the scheduler */
+    public void onRemoteDisconnect() {
+        disconnect();
+    }
+
     // Re-Expose
     public boolean isConnected() {
         return serverConnection != null && serverConnection.isConnected();
     }
 
     public void disconnectWithError(Exception e) {
+        AtomicBoolean closed = sessionClosed;
+        boolean wasOpen = closed == null || !closed.get();
         disconnect();
-        packetHandler.onConnectionError(e);
+        if(wasOpen) {
+            packetHandler.onConnectionError(e);
+        }
     }
 
     public <T extends GMAPacket<T>> void send(T packet) {
@@ -167,6 +185,14 @@ public class GMA4JNetClient {
 
     public <T extends GMAPacket<T>> void sendUrgent(T packet) {
         serverConnection.send(packet, true);
+    }
+
+    public <T extends GMAPacket<T>> CompletableFuture<Void> sendWithCompletion(T packet) {
+        return serverConnection.sendWithCompletion(packet, false);
+    }
+
+    public <T extends GMAPacket<T>> CompletableFuture<Void> sendWithCompletion(T packet, boolean urgent) {
+        return serverConnection.sendWithCompletion(packet, urgent);
     }
 
     public boolean isAuthenticated() {

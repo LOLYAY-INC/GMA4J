@@ -22,6 +22,9 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.util.Arrays;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @Slf4j
 @Getter
@@ -35,6 +38,12 @@ public class ClientOnServer implements ServerConnectionListener, IPacketHandler 
     @Getter(AccessLevel.NONE)
     private volatile MessageSender messageSender;
     private volatile boolean connected = false;
+    @Getter(AccessLevel.NONE)
+    private final AtomicBoolean admitted = new AtomicBoolean();
+    @Getter(AccessLevel.NONE)
+    private volatile boolean everAdmitted;
+    @Getter(AccessLevel.NONE)
+    private volatile ScheduledFuture<?> handshakeDeadline;
 
     @Getter(AccessLevel.NONE)
     private long bigSizeReserved;
@@ -50,8 +59,9 @@ public class ClientOnServer implements ServerConnectionListener, IPacketHandler 
     private UUID assignedId;
     @Setter
     private String claimedClientId;
-    @Setter
-    private boolean authenticated = false;
+    @Getter(AccessLevel.NONE)
+    @Setter(AccessLevel.NONE)
+    private volatile boolean authenticated = false;
     @Setter
     private GmaAuthServer selectedAuthServer;
     @Setter
@@ -66,8 +76,28 @@ public class ClientOnServer implements ServerConnectionListener, IPacketHandler 
                 this::disconnect,
                 new PacketDistributorImpl(new ServerDefaultSystemPacketCallback(this),
                         this, () -> authenticated),
-                settings
+                settings,
+                () -> authenticated
         );
+    }
+
+    public boolean isAuthenticated() {
+        return authenticated;
+    }
+
+    public void setAuthenticated(boolean authenticated) {
+        this.authenticated = authenticated;
+        if (authenticated) {
+            cancelHandshakeDeadline();
+        }
+    }
+
+    private void cancelHandshakeDeadline() {
+        ScheduledFuture<?> deadline = handshakeDeadline;
+        if (deadline != null) {
+            deadline.cancel(false);
+            handshakeDeadline = null;
+        }
     }
 
     @Override
@@ -86,6 +116,22 @@ public class ClientOnServer implements ServerConnectionListener, IPacketHandler 
         }
         boolean expedite = urgent && settings.isLowLatency();
         messageSender.send(pipeline.encode(packet, expedite), expedite);
+    }
+
+    public synchronized <T extends GMAPacket<T>> CompletableFuture<Void> sendWithCompletion(T packet) {
+        return sendWithCompletion(packet, false);
+    }
+
+    public synchronized <T extends GMAPacket<T>> CompletableFuture<Void> sendWithCompletion(T packet, boolean urgent) {
+        if(messageSender == null || !connected) {
+            return CompletableFuture.failedFuture(new IllegalStateException("Connection is not established"));
+        }
+        boolean expedite = urgent && settings.isLowLatency();
+        try {
+            return messageSender.sendWithCompletion(pipeline.encode(packet, expedite), expedite);
+        } catch (RuntimeException e) {
+            return CompletableFuture.failedFuture(e);
+        }
     }
 
     /** Status goes out under the old settings, then the new ones apply */
@@ -162,8 +208,20 @@ public class ClientOnServer implements ServerConnectionListener, IPacketHandler 
 
     @Override
     public void onConnectionEstablished(MessageSender sender) {
+        if (!netServer.tryAdmit()) {
+            log.warn("Rejecting {}: connection limit of {} reached", remoteId, SharedConfig.MAX_CONNECTIONS);
+            sender.close();
+            return;
+        }
+        admitted.set(true);
+        everAdmitted = true;
         this.messageSender = sender;
         this.connected = true;
+        handshakeDeadline = netServer.scheduleHandshakeDeadline(() -> {
+            if (!authenticated) {
+                disconnect("Auth handshake timeout");
+            }
+        });
         log.info("Client connected: {}", remoteId);
         netServer.getEventHandler().onClientConnected(this);
     }
@@ -176,7 +234,10 @@ public class ClientOnServer implements ServerConnectionListener, IPacketHandler 
     @Override
     public void onConnectionClosed(String reason) {
         close();
-        netServer.getEventHandler().onClientDisconnected(this, reason);
+        // rejected connections never reached the event handler
+        if (everAdmitted) {
+            netServer.getEventHandler().onClientDisconnected(this, reason);
+        }
     }
 
     @Override
@@ -203,6 +264,7 @@ public class ClientOnServer implements ServerConnectionListener, IPacketHandler 
 
     private void close() {
         connected = false;
+        cancelHandshakeDeadline();
         if(messageSender != null) {
             messageSender.close();
         }
@@ -213,6 +275,9 @@ public class ClientOnServer implements ServerConnectionListener, IPacketHandler 
                 netServer.releaseBigSizeBudget(bigSizeReserved);
                 bigSizeReserved = 0;
             }
+        }
+        if (admitted.compareAndSet(true, false)) {
+            netServer.releaseAdmission();
         }
 
         try {

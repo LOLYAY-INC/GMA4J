@@ -16,6 +16,8 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import java.util.concurrent.CompletableFuture;
+
 @Slf4j
 @RequiredArgsConstructor
 public class ServerConnection implements ClientConnectionListener { // client has a connection to a server
@@ -44,6 +46,18 @@ public class ServerConnection implements ClientConnectionListener { // client ha
         boolean expedite = urgent && settings.isLowLatency();
         byte[] packet = pipeline.encode(data, expedite);
         messageSender.send(packet, expedite);
+    }
+
+    public synchronized <T extends GMAPacket<T>> CompletableFuture<Void> sendWithCompletion(T data, boolean urgent) {
+        if(messageSender == null || !isConnected) {
+            return CompletableFuture.failedFuture(new IllegalStateException("Connection is not established"));
+        }
+        boolean expedite = urgent && settings.isLowLatency();
+        try {
+            return messageSender.sendWithCompletion(pipeline.encode(data, expedite), expedite);
+        } catch (RuntimeException e) {
+            return CompletableFuture.failedFuture(e);
+        }
     }
 
     public void applyModes(boolean lowLatency, boolean bigSize) {
@@ -101,7 +115,7 @@ public class ServerConnection implements ClientConnectionListener { // client ha
         log.info("Connection closed with {}", uri);
         connectionStateCallback.onConnectionClosed(reason);
         isConnected = false;
-
+        netClient.onRemoteDisconnect();
     }
 
     @Override
@@ -109,7 +123,7 @@ public class ServerConnection implements ClientConnectionListener { // client ha
         log.error("Error in the connection to {}", uri, e);
         isConnected = false;
         connectionStateCallback.onConnectionError(e);
-
+        netClient.onRemoteDisconnect();
     }
 
     @Override

@@ -24,6 +24,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
 import io.lolyay.gma4j.net.shared.SharedConfig;
@@ -43,6 +48,10 @@ public class GMA4JNetServer implements ServerClientHandler {
     private final Map<String, ClientOnServer> clientsByClaimedId = new ConcurrentHashMap<>();
     @Getter(AccessLevel.NONE)
     private final AtomicLong bigSizeBudgetUsed = new AtomicLong();
+    @Getter(AccessLevel.NONE)
+    private final AtomicInteger admittedConnections = new AtomicInteger();
+    @Getter(AccessLevel.NONE)
+    private volatile ScheduledExecutorService scheduler;
 
     private IServerTransport transport;
 
@@ -51,6 +60,11 @@ public class GMA4JNetServer implements ServerClientHandler {
         IServerTransportFactory factory = TransportManager.serverFactoryFor(scheme);
         transport = factory.create(data, this);
         codecRegistry.warmup();
+        scheduler = Executors.newSingleThreadScheduledExecutor(runnable -> {
+            Thread thread = new Thread(runnable, "gma4j-server-scheduler");
+            thread.setDaemon(true);
+            return thread;
+        });
         transport.start();
         log.info("GMA4J server listening on {}:{} ({})", data.host(), data.port(), scheme);
     }
@@ -59,6 +73,35 @@ public class GMA4JNetServer implements ServerClientHandler {
         if(transport != null) {
             transport.stop();
         }
+        ScheduledExecutorService current = scheduler;
+        if(current != null) {
+            current.shutdownNow();
+            scheduler = null;
+        }
+    }
+
+    public boolean tryAdmit() {
+        while (true) {
+            int current = admittedConnections.get();
+            if (current >= SharedConfig.MAX_CONNECTIONS) {
+                return false;
+            }
+            if (admittedConnections.compareAndSet(current, current + 1)) {
+                return true;
+            }
+        }
+    }
+
+    public void releaseAdmission() {
+        admittedConnections.decrementAndGet();
+    }
+
+    ScheduledFuture<?> scheduleHandshakeDeadline(Runnable task) {
+        ScheduledExecutorService current = scheduler;
+        if (current == null || current.isShutdown()) {
+            return null;
+        }
+        return current.schedule(task, SharedConfig.AUTH_HANDSHAKE_TIMEOUT_MS, TimeUnit.MILLISECONDS);
     }
 
     @Override
