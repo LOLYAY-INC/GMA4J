@@ -7,6 +7,7 @@ import io.lolyay.gma4j.net.codec.systemcodec.c2s.C2SAuthPacket;
 import io.lolyay.gma4j.net.codec.systemcodec.c2s.C2SAuthResponsePacket;
 import io.lolyay.gma4j.net.codec.systemcodec.callbacks.SystemPacketCallback;
 import io.lolyay.gma4j.net.codec.systemcodec.s2c.*;
+import io.lolyay.gma4j.net.shared.SharedConfig;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -24,9 +25,24 @@ public class ClientDefaultSystemPacketCallback implements SystemPacketCallback {
             case S2CAuthStatusPacket s2CAuthStatusPacket -> onAuthStatus(s2CAuthStatusPacket);
             case S2CKeepAlivePacket s2CKeepAlivePacket -> netClient.onKeepAlive();
             case S2CCodecStateUpdatePacket codecStateUpdatePacket -> log.warn("Received codec state update packet, even tho we are Java?");
+            case S2CModeStatusPacket s2CModeStatusPacket -> onModeStatus(s2CModeStatusPacket);
 
             default -> throw new IllegalStateException("Unexpected value: " + packet);
         }
+    }
+
+    private void onModeStatus(S2CModeStatusPacket packet) {
+        if(!netClient.isAuthenticated()) {
+            netClient.disconnectWithError(new Exception("Mode status before auth"));
+            return;
+        }
+        if(packet.maxPacketSize() < 0 || (packet.bigSize() && packet.maxPacketSize() > SharedConfig.MAX_BIG_PACKET_SIZE)) {
+            netClient.disconnectWithError(new Exception("Invalid mode grant size: " + packet.maxPacketSize()));
+            return;
+        }
+        log.info("Modes granted: lowLatency={}, bigSize={}, maxPacketSize={}",
+                packet.lowLatency(), packet.bigSize(), packet.maxPacketSize());
+        netClient.applyModes(packet.lowLatency(), packet.bigSize(), packet.maxPacketSize());
     }
 
     protected void onAuthStatus(S2CAuthStatusPacket authStatusPacket) {

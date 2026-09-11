@@ -10,6 +10,7 @@ GMA4J gives you auth, end-to-end encryption, with pluggable transports (WebSocke
 - **End-to-end encryption** negotiated on connect: ephemeral ECDH (P-256) key agreement, AES-256-GCM.
 - **Trust-on-first-use server pinning** (SSH `known_hosts` style), so a swapped server key is detected and rejected.
 - **Pluggable authentication** after encryption is up: none, API key, HMAC-SHA256, or ECDSA, all **modular**.
+- **Runtime connection modes**: clients can negotiate low latency (no compression, TCP_NODELAY, urgent sends) and big size (packets beyond the 1 MiB base limit, budgeted server-side) per connection. See CLIENT.md and SERVER.md.
 - **Modular**: depend only on the client and the transport(s) you need.
 
 ## Modules

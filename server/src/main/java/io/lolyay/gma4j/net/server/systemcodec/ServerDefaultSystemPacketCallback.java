@@ -9,6 +9,7 @@ import io.lolyay.gma4j.net.codec.systemcodec.c2s.C2SAuthPacket;
 import io.lolyay.gma4j.net.codec.systemcodec.c2s.C2SAuthResponsePacket;
 import io.lolyay.gma4j.net.codec.systemcodec.c2s.C2SHelloPacket;
 import io.lolyay.gma4j.net.codec.systemcodec.c2s.C2SKeepAlivePacket;
+import io.lolyay.gma4j.net.codec.systemcodec.c2s.C2SModeRequestPacket;
 import io.lolyay.gma4j.net.codec.systemcodec.callbacks.SystemPacketCallback;
 import io.lolyay.gma4j.net.codec.systemcodec.s2c.*;
 import io.lolyay.gma4j.net.server.net.ClientOnServer;
@@ -29,6 +30,7 @@ public class ServerDefaultSystemPacketCallback implements SystemPacketCallback {
             case C2SAuthPacket c2SAuthPacket -> onC2SAuth(c2SAuthPacket);
             case C2SAuthResponsePacket c2SAuthResponsePacket -> onC2SAuthResponse(c2SAuthResponsePacket);
             case C2SKeepAlivePacket c2SKeepAlivePacket -> client.send(new S2CKeepAlivePacket(c2SKeepAlivePacket.id()));
+            case C2SModeRequestPacket c2SModeRequestPacket -> onC2SModeRequest(c2SModeRequestPacket);
 
             default -> throw new IllegalStateException("Unexpected value: " + packet);
         }
@@ -141,5 +143,21 @@ public class ServerDefaultSystemPacketCallback implements SystemPacketCallback {
         client.send(new S2CAuthStatusPacket(true));
         log.info("Client authenticated: {} ({})", client.getClaimedClientId(), client.getAssignedId());
         client.getNetServer().getEventHandler().onClientAuthenticated(client);
+    }
+
+    private void onC2SModeRequest(C2SModeRequestPacket packet) {
+        if(!client.isAuthenticated()) {
+            client.disconnect("Mode request before auth");
+            return;
+        }
+        if(packet.requestedMaxPacketSize() < 0) {
+            client.disconnect("Negative mode packet size");
+            return;
+        }
+        if(!client.modeChangeAllowed()) {
+            log.warn("Rate limited mode request from {}", client.getClaimedClientId());
+            return;
+        }
+        client.setModes(packet.lowLatency(), packet.bigSize(), packet.requestedMaxPacketSize());
     }
 }

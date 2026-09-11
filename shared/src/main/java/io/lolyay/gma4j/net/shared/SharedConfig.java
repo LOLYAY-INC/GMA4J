@@ -30,6 +30,13 @@ public class SharedConfig {
     public static long AUTH_HANDSHAKE_TIMEOUT_MS = 1000 * 10; // must be authenticated within 10 seconds of connecting
 
 
+    // Connection modes
+    public static boolean ALLOW_LOW_LATENCY_MODE = true;
+    public static boolean ALLOW_BIG_SIZE_MODE = true;
+    public static int MAX_BIG_PACKET_SIZE = 32 * 1024 * 1024; // per client ceiling for big size grants
+    public static long BIG_SIZE_TOTAL_BUDGET = 256L * 1024 * 1024; // server wide, bounds worst case decode memory
+    public static long MODE_CHANGE_MIN_INTERVAL_MS = 1000;
+    public static int MAX_MODE_CHANGE_VIOLATIONS = 3;
 
 
 }

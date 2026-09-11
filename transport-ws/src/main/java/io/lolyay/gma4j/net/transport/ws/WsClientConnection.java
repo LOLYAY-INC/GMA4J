@@ -6,9 +6,11 @@ import org.java_websocket.client.WebSocketClient;
 public class WsClientConnection implements MessageSender {
 
     private final WebSocketClient client;
+    private final int frameCap;
 
-    public WsClientConnection(WebSocketClient client) {
+    public WsClientConnection(WebSocketClient client, int frameCap) {
         this.client = client;
+        this.frameCap = frameCap;
     }
 
     @Override
@@ -18,6 +20,12 @@ public class WsClientConnection implements MessageSender {
         }
         client.send(data);
         return true;
+    }
+
+    @Override
+    public int maxSupportedFrameSize() {
+        // Draft frame cap is fixed at construction, so big size cannot grow past it
+        return frameCap;
     }
 
     @Override

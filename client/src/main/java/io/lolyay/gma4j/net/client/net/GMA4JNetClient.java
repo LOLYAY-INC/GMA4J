@@ -7,11 +7,13 @@ import io.lolyay.gma4j.net.codec.CodecRegistry;
 import io.lolyay.gma4j.net.codec.PacketPipeline;
 import io.lolyay.gma4j.net.codec.auth.GmaAuthType;
 import io.lolyay.gma4j.net.codec.auth.client.GmaAuthClient;
+import io.lolyay.gma4j.net.codec.connection.ConnectionSettings;
 import io.lolyay.gma4j.net.codec.encryption.client.ClientEncryptionState;
 import io.lolyay.gma4j.net.codec.encryption.client.IClientKnownCertificateKeeper;
 import io.lolyay.gma4j.net.codec.packet.GMAPacket;
 import io.lolyay.gma4j.net.codec.packetdistributer.PacketDistributorImpl;
 import io.lolyay.gma4j.net.codec.systemcodec.c2s.C2SKeepAlivePacket;
+import io.lolyay.gma4j.net.codec.systemcodec.c2s.C2SModeRequestPacket;
 import io.lolyay.gma4j.net.shared.SharedConfig;
 import io.lolyay.gma4j.net.transport.IClientTransport;
 import io.lolyay.gma4j.net.transport.IClientTransportFactory;
@@ -39,6 +41,7 @@ public class GMA4JNetClient {
     private ServerConnection serverConnection;
     private PacketPipeline pipeline;
     private IClientTransport transport;
+    private ConnectionSettings connectionSettings;
 
     @Setter
     private UUID clientId;
@@ -66,13 +69,15 @@ public class GMA4JNetClient {
             thread.setDaemon(true);
             return thread;
         });
+        this.connectionSettings = new ConnectionSettings();
         this.pipeline = new PacketPipeline(
                 this::disconnect,
                 new PacketDistributorImpl(
                         new ClientDefaultSystemPacketCallback(this),
-                        packetHandler,() -> authenticated)
+                        packetHandler,() -> authenticated),
+                connectionSettings
         );
-        this.serverConnection = new ServerConnection(this, pipeline, packetHandler, claimedClientId, uri);
+        this.serverConnection = new ServerConnection(this, pipeline, connectionSettings, packetHandler, claimedClientId, uri);
 
         transport = transportFactory.create(serverConnection);
         codecRegistry.warmup();
@@ -156,5 +161,30 @@ public class GMA4JNetClient {
 
     public <T extends GMAPacket<T>> void send(T packet) {
         serverConnection.send(packet);
+    }
+
+    public <T extends GMAPacket<T>> void sendUrgent(T packet) {
+        serverConnection.send(packet, true);
+    }
+
+    public boolean isAuthenticated() {
+        return authenticated;
+    }
+
+    public void requestModes(boolean lowLatency, boolean bigSize, int requestedMaxPacketSize) {
+        if(!authenticated) {
+            throw new IllegalStateException("Modes can only be requested after authentication");
+        }
+        if(requestedMaxPacketSize < 0) {
+            throw new IllegalArgumentException("requestedMaxPacketSize must be >= 0");
+        }
+        send(new C2SModeRequestPacket(lowLatency, bigSize, requestedMaxPacketSize));
+    }
+
+    /** Called on S2CModeStatusPacket, the grant is already validated */
+    public void applyModes(boolean lowLatency, boolean bigSize, int maxPacketSize) {
+        connectionSettings.apply(lowLatency, bigSize, maxPacketSize);
+        serverConnection.applyModes(lowLatency, bigSize);
+        packetHandler.onModesChanged(lowLatency, bigSize, maxPacketSize);
     }
 }

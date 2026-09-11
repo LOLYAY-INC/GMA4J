@@ -17,4 +17,7 @@ public interface ServerEventHandler {
 
     default void onClientError(ClientOnServer client, Throwable e) {
     }
+
+    default void onClientModeChanged(ClientOnServer client) {
+    }
 }

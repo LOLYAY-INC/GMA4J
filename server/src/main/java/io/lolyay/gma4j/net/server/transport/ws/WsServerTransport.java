@@ -33,10 +33,11 @@ public class WsServerTransport implements IServerTransport {
     private final WebSocketServer server;
 
     public WsServerTransport(ServerTransportData data, ServerClientHandler clientHandler) {
+        int frameCap = SharedConfig.MAX_PACKET_SIZE;
         Draft_6455 draft = new Draft_6455(
                 Collections.emptyList(),
                 Collections.singletonList(new Protocol("")),
-                SharedConfig.MAX_PACKET_SIZE
+                frameCap
         );
 
         this.server = new WebSocketServer(new InetSocketAddress(data.host(), data.port()), SharedConfig.NETWORK_THREADS, List.of(draft)) {
@@ -44,7 +45,7 @@ public class WsServerTransport implements IServerTransport {
             public void onOpen(WebSocket conn, ClientHandshake handshake) {
                 ServerConnectionListener listener = clientHandler.getOrCreateClient(remoteId(conn));
                 conn.setAttachment(listener);
-                listener.onConnectionEstablished(new WsServerConnection(conn));
+                listener.onConnectionEstablished(new WsServerConnection(conn, frameCap));
             }
 
             @Override
@@ -61,10 +62,11 @@ public class WsServerTransport implements IServerTransport {
 
             @Override
             public void onMessage(WebSocket conn, ByteBuffer message) {
-                if (message.remaining() > SharedConfig.MAX_PACKET_SIZE) {
+                ServerConnectionListener listener = conn.getAttachment();
+                int limit = listener != null ? listener.maxIncomingFrameSize() : SharedConfig.MAX_PACKET_SIZE;
+                if (message.remaining() > limit) {
                     PacketCodingException error = new PacketCodingException(
-                            "Packet too large: " + message.remaining() + " > " + SharedConfig.MAX_PACKET_SIZE);
-                    ServerConnectionListener listener = conn.getAttachment();
+                            "Packet too large: " + message.remaining() + " > " + limit);
                     if (listener != null) {
                         listener.onConnectionError(error);
                     }
@@ -72,7 +74,6 @@ public class WsServerTransport implements IServerTransport {
                     return;
                 }
 
-                ServerConnectionListener listener = conn.getAttachment();
                 if (listener != null) {
                     byte[] data = new byte[message.remaining()];
                     message.get(data);

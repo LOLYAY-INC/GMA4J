@@ -41,6 +41,21 @@ public class GMA4JClient {
         netClient.send(packet);
     }
 
+    /** Only skips coalescing when low latency mode is granted */
+    public <T extends GMAPacket<T>> void sendUrgent(T packet) {
+        netClient.sendUrgent(packet);
+    }
+
+    /**
+     * Asks the server for connection modes, the grant arrives via onModesChanged
+     */
+    public void requestModes(boolean lowLatency, boolean bigSize, int requestedMaxPacketSize) {
+        if(netClient == null) {
+            throw new IllegalStateException("Not connected");
+        }
+        netClient.requestModes(lowLatency, bigSize, requestedMaxPacketSize);
+    }
+
     public boolean isConnected() {
         return netClient != null && netClient.isConnected();
     }

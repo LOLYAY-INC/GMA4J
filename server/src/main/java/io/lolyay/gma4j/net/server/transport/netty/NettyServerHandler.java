@@ -2,6 +2,7 @@ package io.lolyay.gma4j.net.server.transport.netty;
 
 import io.lolyay.gma4j.net.codec.connection.server.ServerClientHandler;
 import io.lolyay.gma4j.net.codec.connection.server.ServerConnectionListener;
+import io.lolyay.gma4j.net.shared.SharedConfig;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
@@ -9,10 +10,16 @@ import io.netty.channel.ChannelInboundHandlerAdapter;
 public class NettyServerHandler extends ChannelInboundHandlerAdapter {
 
     private final ServerClientHandler clientHandler;
-    private ServerConnectionListener listener;
+    private volatile ServerConnectionListener listener;
 
     public NettyServerHandler(ServerClientHandler clientHandler) {
         this.clientHandler = clientHandler;
+    }
+
+    /** Base limit until the listener exists */
+    public int currentFrameLimit() {
+        ServerConnectionListener current = listener;
+        return current != null ? current.maxIncomingFrameSize() : SharedConfig.MAX_PACKET_SIZE;
     }
 
     @Override

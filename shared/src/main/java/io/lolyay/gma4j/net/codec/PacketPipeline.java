@@ -1,5 +1,6 @@
 package io.lolyay.gma4j.net.codec;
 
+import io.lolyay.gma4j.net.codec.connection.ConnectionSettings;
 import io.lolyay.gma4j.net.codec.encryption.PacketCryptor;
 import io.lolyay.gma4j.net.codec.packet.GMAPacket;
 import io.lolyay.gma4j.net.codec.packet.PacketType;
@@ -8,7 +9,7 @@ import io.lolyay.gma4j.net.shared.CodecType;
 import io.lolyay.gma4j.net.shared.SharedConfig;
 import io.lolyay.gma4j.net.util.ByteReader;
 import io.lolyay.gma4j.net.util.ByteWriter;
-import lombok.RequiredArgsConstructor;
+import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 
@@ -17,7 +18,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.zip.DataFormatException;
 
 @Slf4j
-@RequiredArgsConstructor
 public class PacketPipeline {
     @Setter
     private volatile PacketCryptor cryptor;
@@ -32,16 +32,33 @@ public class PacketPipeline {
     private int outOfSequenceCount;
     private int decodeErrorCount;
     private final IPacketDistributor distributor;
+    @Getter
+    private final ConnectionSettings settings;
+
+    public PacketPipeline(Runnable closeHook, IPacketDistributor distributor) {
+        this(closeHook, distributor, new ConnectionSettings());
+    }
+
+    public PacketPipeline(Runnable closeHook, IPacketDistributor distributor, ConnectionSettings settings) {
+        this.closeHook = closeHook;
+        this.distributor = distributor;
+        this.settings = settings;
+    }
 
     public <T extends GMAPacket<T>> byte[] encode(T packet) {
+        return encode(packet, false);
+    }
+
+    public <T extends GMAPacket<T>> byte[] encode(T packet, boolean urgent) {
         synchronized (encodeLock) {
             requireOpen();
-            byte[] encoded = encodePacket(packet, sequence);
+            int limit = settings.sendLimit();
+            byte[] encoded = encodePacket(packet, sequence, urgent, limit);
             if (cryptor != null) {
                 encoded = cryptor.encrypt(encoded);
             }
-            if (encoded.length > SharedConfig.MAX_PACKET_SIZE) {
-                throw new PacketCodingException("Packet too large: " + encoded.length + " > " + SharedConfig.MAX_PACKET_SIZE);
+            if (encoded.length > limit) {
+                throw new PacketCodingException("Packet too large: " + encoded.length + " > " + limit);
             }
             sequence++;
             return encoded;
@@ -120,7 +137,25 @@ public class PacketPipeline {
         remoteSequence++;
         outOfSequenceCount = 0;
 
-        boolean compressed = (data[4] & 0x1) != 0;
+        int flags = data[4] & 0xFF;
+        if ((flags & PacketFlags.RESERVED_MASK) != 0) {
+            throw new PacketCodingException("Reserved header flag bits set: 0x" + Integer.toHexString(flags));
+        }
+        boolean compressed = (flags & PacketFlags.COMPRESSED) != 0;
+        boolean big = (flags & PacketFlags.BIG) != 0;
+        boolean urgent = (flags & PacketFlags.URGENT) != 0;
+        boolean oversized = data.length > settings.getBasePacketSize();
+        if (big != oversized) {
+            throw new PacketCodingException(big
+                    ? "Big flag on packet of " + data.length + " bytes"
+                    : "Oversized packet of " + data.length + " bytes without big flag");
+        }
+        if (big && !settings.isBigReceiveAllowed()) {
+            throw new PacketCodingException("Big packet without granted big size mode");
+        }
+        if (urgent && !settings.isUrgentReceiveAllowed()) {
+            throw new PacketCodingException("Urgent flag without granted low latency mode");
+        }
         int codecOrdinal = data[5] & 0xFF;
         int packetId = ((data[6] & 0xFF) << 8) | (data[7] & 0xFF);
 
@@ -145,7 +180,7 @@ public class PacketPipeline {
             }
             int compressedLength = payload.length;
             try {
-                payload = CompressionUtil.decompress(payload);
+                payload = CompressionUtil.decompress(payload, settings.receiveLimit());
             } catch (DataFormatException e) {
                 throw new PacketCodingException("Error while decompressing packet", e);
             }
@@ -159,7 +194,7 @@ public class PacketPipeline {
         }
     }
 
-    private <T extends GMAPacket<T>> byte[] encodePacket(T packet, int currentSequence) throws PacketCodingException {
+    private <T extends GMAPacket<T>> byte[] encodePacket(T packet, int currentSequence, boolean urgent, int limit) throws PacketCodingException {
         byte[] payload;
         boolean compressed = false;
         CodecType codecType = packet.getPacketType().codec().getCodecType();
@@ -170,12 +205,15 @@ public class PacketPipeline {
         } catch (Exception e) {
             throw new PacketCodingException("Error encoding packet: " + packetId, e);
         }
-        if (payload.length > SharedConfig.MAX_PACKET_SIZE) {
+        if (payload.length > limit) {
             throw new PacketCodingException("Packet payload too large: " + payload.length
-                    + " > " + SharedConfig.MAX_PACKET_SIZE);
+                    + " > " + limit);
         }
 
-        if (payload.length >= SharedConfig.PACKET_COMPRESSION_THRESHOLD && SharedConfig.PACKET_COMPRESSION_ENABLED) {
+        // low latency trades bandwidth for the compression stall
+        if (!settings.isLowLatency()
+                && payload.length >= SharedConfig.PACKET_COMPRESSION_THRESHOLD
+                && SharedConfig.PACKET_COMPRESSION_ENABLED) {
             int uncompressedLength = payload.length;
             try {
                 byte[] compressedPayload = CompressionUtil.compress(payload);
@@ -189,9 +227,17 @@ public class PacketPipeline {
             }
         }
 
+        int flags = compressed ? PacketFlags.COMPRESSED : 0;
+        if (payload.length + 8 > settings.getBasePacketSize()) {
+            flags |= PacketFlags.BIG;
+        }
+        if (urgent && settings.isLowLatency()) {
+            flags |= PacketFlags.URGENT;
+        }
+
         byte[] encodedPacket = new byte[payload.length + 8];
         ByteWriter.writeInt(encodedPacket, currentSequence, 0);
-        encodedPacket[4] = (byte) (compressed ? 1 : 0);
+        encodedPacket[4] = (byte) flags;
         encodedPacket[5] = (byte) codecType.ordinal();
         encodedPacket[6] = (byte) (packetId >> 8);
         encodedPacket[7] = (byte) packetId;
@@ -203,8 +249,9 @@ public class PacketPipeline {
         if (data == null || data.length < 8) {
             throw new PacketCodingException("Packet too short");
         }
-        if (data.length > SharedConfig.MAX_PACKET_SIZE) {
-            throw new PacketCodingException("Packet too large: " + data.length + " > " + SharedConfig.MAX_PACKET_SIZE);
+        int limit = settings.receiveLimit();
+        if (data.length > limit) {
+            throw new PacketCodingException("Packet too large: " + data.length + " > " + limit);
         }
     }
 

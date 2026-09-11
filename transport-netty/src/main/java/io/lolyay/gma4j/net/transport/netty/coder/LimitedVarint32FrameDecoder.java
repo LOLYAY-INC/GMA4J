@@ -8,16 +8,28 @@ import io.netty.handler.codec.CorruptedFrameException;
 import io.netty.handler.codec.protobuf.ProtobufVarint32FrameDecoder;
 
 import java.util.List;
+import java.util.function.IntSupplier;
 
 public class LimitedVarint32FrameDecoder extends ProtobufVarint32FrameDecoder  {
+    private final IntSupplier maxFrameSize;
+
+    public LimitedVarint32FrameDecoder() {
+        this(() -> SharedConfig.MAX_PACKET_SIZE);
+    }
+
+    public LimitedVarint32FrameDecoder(IntSupplier maxFrameSize) {
+        this.maxFrameSize = maxFrameSize;
+    }
+
     @Override
     protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws Exception {
         in.markReaderIndex();
         int preIndex = in.readerIndex();
         int length = readRawVarint32(in);
 
-        if(length > SharedConfig.MAX_PACKET_SIZE) {
-            throw new PacketCodingException("Packet too large; Size: %s, max: %s".formatted(length, SharedConfig.MAX_PACKET_SIZE));
+        int limit = maxFrameSize.getAsInt();
+        if(length > limit) {
+            throw new PacketCodingException("Packet too large; Size: %s, max: %s".formatted(length, limit));
         }
 
         if (preIndex == in.readerIndex()) {
