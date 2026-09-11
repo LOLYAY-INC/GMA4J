@@ -15,6 +15,10 @@ public final class ClientAuth {
         return GmaApiKeyAuth.of(apiKey);
     }
 
+    public static GmaAuthClient jwt(String jwt) {
+        return GmaJWTAuth.of(jwt);
+    }
+
 
     public static GmaAuthClient hmac(String secret) {
         return GmaHMACKeyAuth.of(secret);
@@ -23,7 +27,6 @@ public final class ClientAuth {
     public static GmaAuthClient hmac(byte[] secret) {
         return GmaHMACKeyAuth.of(secret);
     }
-
 
     /**
      * Creates a new {@link GmaECCKeyAuth} instance from a PEM encoded ECDSA private key.

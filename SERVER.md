@@ -80,13 +80,15 @@ import io.lolyay.gma4j.net.codec.auth.server.GmaApiKeyAuthServer;
 GmaApiHmacAuthServer hmacAuth = new GmaApiHmacAuthServer("super-secret-key");
 ```
 
-| Backend                       | Auth type                          | Client counterpart       |
-|-------------------------------|------------------------------------|--------------------------|
-| `GmaNoAuthServer`             | none (insecure, testing)           | `ClientAuth.none()`      |
-| `GmaApiKeyAuthServer(apiKey)` | API key (**DEPRECATED**), Use HMAC | `ClientAuth.apiKey(...)` |
-| `GmaApiHmacAuthServer`        | HMAC-SHA256                        | `ClientAuth.hmac(...)`   |
-| `GmaApiECCAuthServer`         | ECDSA                              | `ClientAuth.ecc(...)`    |
-| `GmaMultiClientECCAuthServer` | ECDSA (One Key for each Client ID) | `ClientAuth.ecc(...)`    |
+| Backend                        | Auth type                                      | Client counterpart       |
+|--------------------------------|------------------------------------------------|--------------------------|
+| `GmaNoAuthServer`              | none (insecure, testing)                       | `ClientAuth.none()`      |
+| `GmaApiKeyAuthServer(apiKey)`  | API key (**DEPRECATED**), Use HMAC             | `ClientAuth.apiKey(...)` |
+| `GmaApiHmacAuthServer`         | HMAC-SHA256                                    | `ClientAuth.hmac(...)`   |
+| `GmaMultiClientHmacAuthServer` | HMAC-SHA256 (One Key for each Client ID)       | `ClientAuth.hmac(...)`   |
+| `GmaApiECCAuthServer`          | ECDSA                                          | `ClientAuth.ecc(...)`    |
+| `GmaMultiClientECCAuthServer`  | ECDSA (One Key for each Client ID)             | `ClientAuth.ecc(...)`    |
+| `GmaJWTAuthServer`             | JWT Key (Optionally: require client id in aud) | `ClientAuth.jwt(...)`    |
 
 ## 4. Bind and start
 

@@ -97,6 +97,7 @@ Available auth clients:
 | `ClientAuth.apiKey(String)`                               | API key (**deprecated**, use HMAC instead) |
 | `ClientAuth.hmac(String)` / `ClientAuth.hmac(byte[])`     | HMAC-SHA256                                |
 | `ClientAuth.ecc(String)` / `ClientAuth.ecc(ECPrivateKey)` | ECDSA                                      |
+| `ClientAuth.jwt(String)`                                  | JWT                                        |
 
 You may pass several to offer multiple; the server picks the strongest it also supports.
 

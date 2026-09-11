@@ -4,7 +4,7 @@ public enum ENV {
     CLIENT,
     SERVER;
 
-    public static short GMA4J_VERSION = 5;
-    public static short SYSTEM_CODEC_VERSION = 5;
-    public static int ENCRYPTION_CODEC_VERSION = 2;
+    public static final short GMA4J_VERSION = 7;
+    public static final short SYSTEM_CODEC_VERSION = 6;
+    public static final int ENCRYPTION_CODEC_VERSION = 2;
 }

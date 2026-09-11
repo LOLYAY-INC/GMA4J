@@ -10,7 +10,8 @@ buildNumber.properties
 .mvn/timing.properties
 .mvn/wrapper/maven-wrapper.jar
 !.mvn/wrapper/maven-wrapper.jar
-
+.mcp.json
+.windsurf
 # Compiled output
 *.class
 build/
