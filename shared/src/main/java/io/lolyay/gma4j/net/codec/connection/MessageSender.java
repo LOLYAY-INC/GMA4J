@@ -1,5 +1,7 @@
 package io.lolyay.gma4j.net.codec.connection;
 
+import java.util.concurrent.CompletableFuture;
+
 public interface MessageSender {
     boolean send(byte[] data);
 
@@ -8,6 +10,16 @@ public interface MessageSender {
      */
     default boolean send(byte[] data, boolean urgent) {
         return send(data);
+    }
+
+    /**
+     * Completes when the transport has written the data. Transports without
+     * flush feedback complete at hand-off.
+     */
+    default CompletableFuture<Void> sendWithCompletion(byte[] data, boolean urgent) {
+        return send(data, urgent)
+                ? CompletableFuture.completedFuture(null)
+                : CompletableFuture.failedFuture(new IllegalStateException("Send failed"));
     }
 
     /**

@@ -281,7 +281,7 @@ class OutboundQueueLimitTest {
     private static ServerConnection connectedClient(MessageSender sender,
                                                      IConnectionStateCallback stateCallback) throws Exception {
         PacketPipeline pipeline = new PacketPipeline(() -> {}, new NoopPacketDistributor());
-        ServerConnection connection = new ServerConnection(null, pipeline, pipeline.getSettings(), stateCallback, "client", "test://server");
+        ServerConnection connection = new ServerConnection(null, pipeline, pipeline.getSettings(), stateCallback, "client", "test://server", 0L);
         setField(connection, "messageSender", sender);
         setField(connection, "isConnected", true);
         return connection;

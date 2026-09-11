@@ -117,10 +117,14 @@ public class GMA4JNetServer implements ServerClientHandler {
     }
 
     void trackConnection(ClientOnServer client) {
-        connections.add(client);
         ScheduledFuture<?> deadline = null;
+        boolean admitted = false;
         synchronized (lifecycleMonitor) {
-            if(acceptingConnections && !handshakeScheduler.isShutdown()) {
+            // the tracked set is the live connection count, so it also caps admission
+            if(acceptingConnections && !handshakeScheduler.isShutdown()
+                    && connections.size() < SharedConfig.MAX_CONNECTIONS) {
+                connections.add(client);
+                admitted = true;
                 deadline = handshakeScheduler.schedule(
                         client::expireHandshake,
                         SharedConfig.AUTH_HANDSHAKE_TIMEOUT_MS,
@@ -129,9 +133,8 @@ public class GMA4JNetServer implements ServerClientHandler {
             }
         }
 
-        if(deadline == null) {
-            connections.remove(client);
-            client.disconnect("Server is stopped");
+        if(!admitted) {
+            client.disconnect("Server is not accepting connections");
             return;
         }
         client.installHandshakeDeadline(deadline);
@@ -141,7 +144,9 @@ public class GMA4JNetServer implements ServerClientHandler {
     }
 
     void untrackConnection(ClientOnServer client) {
-        connections.remove(client);
+        synchronized (lifecycleMonitor) {
+            connections.remove(client);
+        }
     }
 
     public synchronized UUID registerClient(ClientOnServer client) {

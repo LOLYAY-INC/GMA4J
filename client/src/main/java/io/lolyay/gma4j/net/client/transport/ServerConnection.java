@@ -16,6 +16,8 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import java.util.concurrent.CompletableFuture;
+
 @Slf4j
 @RequiredArgsConstructor
 public class ServerConnection implements ClientConnectionListener { // client has a connection to a server
@@ -26,6 +28,7 @@ public class ServerConnection implements ClientConnectionListener { // client ha
 
     private final String clientClaimedStringId;
     private final String uri;
+    private final long sessionToken;
 
     private volatile MessageSender messageSender;
 
@@ -66,6 +69,18 @@ public class ServerConnection implements ClientConnectionListener { // client ha
             } else {
                 log.error("Failed to close connection after an outbound send failure", closeFailure);
             }
+        }
+    }
+
+    public synchronized <T extends GMAPacket<T>> CompletableFuture<Void> sendWithCompletion(T data, boolean urgent) {
+        if(messageSender == null || !isConnected) {
+            return CompletableFuture.failedFuture(new IllegalStateException("Connection is not established"));
+        }
+        boolean expedite = urgent && settings.isLowLatency();
+        try {
+            return messageSender.sendWithCompletion(pipeline.encode(data, expedite), expedite);
+        } catch (RuntimeException e) {
+            return CompletableFuture.failedFuture(e);
         }
     }
 
@@ -123,16 +138,26 @@ public class ServerConnection implements ClientConnectionListener { // client ha
     public void onConnectionClosed(String reason) {
         log.info("Connection closed with {}", uri);
         isConnected = false;
-        connectionStateCallback.onConnectionClosed(reason);
-
+        try {
+            connectionStateCallback.onConnectionClosed(reason);
+        } finally {
+            if (netClient != null) {
+                netClient.onRemoteDisconnect(sessionToken);
+            }
+        }
     }
 
     @Override
     public void onConnectionError(Throwable e) {
         log.error("Error in the connection to {}", uri, e);
         isConnected = false;
-        connectionStateCallback.onConnectionError(e);
-
+        try {
+            connectionStateCallback.onConnectionError(e);
+        } finally {
+            if (netClient != null) {
+                netClient.onRemoteDisconnect(sessionToken);
+            }
+        }
     }
 
     @Override

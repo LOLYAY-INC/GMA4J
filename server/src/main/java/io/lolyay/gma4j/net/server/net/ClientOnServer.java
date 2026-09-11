@@ -74,7 +74,8 @@ public class ClientOnServer implements ServerConnectionListener, IPacketHandler 
                 this::disconnect,
                 new PacketDistributorImpl(new ServerDefaultSystemPacketCallback(this),
                         this, () -> authenticated),
-                settings
+                settings,
+                () -> authenticated
         );
     }
 

@@ -15,6 +15,7 @@ import lombok.extern.slf4j.Slf4j;
 import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Supplier;
 import java.util.zip.DataFormatException;
 
 @Slf4j
@@ -32,6 +33,7 @@ public class PacketPipeline {
     private int outOfSequenceCount;
     private int decodeErrorCount;
     private final IPacketDistributor distributor;
+    private final Supplier<Boolean> authGate;
     @Getter
     private final ConnectionSettings settings;
 
@@ -40,9 +42,15 @@ public class PacketPipeline {
     }
 
     public PacketPipeline(Runnable closeHook, IPacketDistributor distributor, ConnectionSettings settings) {
+        this(closeHook, distributor, settings, () -> true);
+    }
+
+    public PacketPipeline(Runnable closeHook, IPacketDistributor distributor, ConnectionSettings settings,
+                          Supplier<Boolean> authGate) {
         this.closeHook = closeHook;
         this.distributor = distributor;
         this.settings = settings;
+        this.authGate = authGate;
     }
 
     public void setCryptor(PacketCryptor cryptor) {
@@ -188,6 +196,11 @@ public class PacketPipeline {
 
         CodecType codecType = CodecType.values()[codecOrdinal];
         PacketType<T> packetType = CodecRegistry.getInstance().getCodec(packetId);
+        // app payloads stay opaque until the peer is authenticated
+        if (!packetType.isSystem() && !authGate.get()) {
+            log.warn("Application packet {} before authentication, closing", packetId);
+            throw new ProtocolCloseSignal();
+        }
         if (packetType.codec().getCodecType() != codecType && SharedConfig.FORCE_CODEC) {
             throw new PacketCodingException("Codec not supported for packet: " + codecType);
         }

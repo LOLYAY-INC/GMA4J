@@ -10,6 +10,7 @@ import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.WriteBufferWaterMark;
 
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class NettyServerConnection implements MessageSender {
@@ -33,32 +34,47 @@ public class NettyServerConnection implements MessageSender {
 
     @Override
     public boolean send(byte[] data, boolean urgent) {
+        return dispatch(data, urgent, null);
+    }
+
+    @Override
+    public CompletableFuture<Void> sendWithCompletion(byte[] data, boolean urgent) {
+        CompletableFuture<Void> done = new CompletableFuture<>();
+        dispatch(data, urgent, done);
+        return done;
+    }
+
+    private boolean dispatch(byte[] data, boolean urgent, CompletableFuture<Void> done) {
         if (closing || !channel.isActive()) {
+            fail(done, new IllegalStateException("Channel is not active"));
             return false;
         }
         OutboundBudget.Reservation reservation = outboundBudget.tryReserve(
                 OutboundBudget.protobufFrameBytes(data.length));
         if (reservation == null) {
             close();
+            fail(done, new IllegalStateException("Outbound budget exhausted"));
             return false;
         }
         boolean coalesced = coalesceFlush && !urgent;
         if (coalesced && !channel.eventLoop().inEventLoop()) {
             try {
-                channel.eventLoop().execute(() -> write(data, reservation, true));
+                channel.eventLoop().execute(() -> write(data, reservation, true, done));
                 return true;
             } catch (RuntimeException failure) {
                 reservation.close();
                 close();
+                fail(done, failure);
                 return false;
             }
         }
-        return write(data, reservation, coalesced);
+        return write(data, reservation, coalesced, done);
     }
 
-    private boolean write(byte[] data, OutboundBudget.Reservation reservation, boolean coalesced) {
+    private boolean write(byte[] data, OutboundBudget.Reservation reservation, boolean coalesced, CompletableFuture<Void> done) {
         if (closing || !channel.isActive()) {
             reservation.close();
+            fail(done, new IllegalStateException("Channel is not active"));
             return false;
         }
         ByteBuf buffer = Unpooled.wrappedBuffer(data);
@@ -68,8 +84,13 @@ public class NettyServerConnection implements MessageSender {
             submitted = true;
             future.addListener(completed -> {
                 reservation.close();
-                if (!completed.isSuccess()) {
+                if (completed.isSuccess()) {
+                    if (done != null) {
+                        done.complete(null);
+                    }
+                } else {
                     close();
+                    fail(done, completed.cause());
                 }
             });
             if (coalesced && flushPending.compareAndSet(false, true)) {
@@ -85,7 +106,14 @@ public class NettyServerConnection implements MessageSender {
                 buffer.release();
             }
             close();
+            fail(done, failure);
             return false;
+        }
+    }
+
+    private static void fail(CompletableFuture<Void> done, Throwable cause) {
+        if (done != null) {
+            done.completeExceptionally(cause);
         }
     }
 
