@@ -30,9 +30,10 @@ public class NettyServerConnection implements MessageSender {
         }
         if (urgent || !coalesceFlush) {
             channel.writeAndFlush(Unpooled.wrappedBuffer(data));
+        } else if (channel.eventLoop().inEventLoop()) {
+            writeCoalesced(data);
         } else {
-            channel.write(Unpooled.wrappedBuffer(data));
-            scheduleFlush();
+            channel.eventLoop().execute(() -> writeCoalesced(data));
         }
         return true;
     }
@@ -46,7 +47,9 @@ public class NettyServerConnection implements MessageSender {
                 : WriteBufferWaterMark.DEFAULT);
     }
 
-    private void scheduleFlush() {
+    /** Write and flush scheduling stay on the event loop so no write can miss its flush */
+    private void writeCoalesced(byte[] data) {
+        channel.write(Unpooled.wrappedBuffer(data));
         if (flushPending.compareAndSet(false, true)) {
             channel.eventLoop().execute(() -> {
                 flushPending.set(false);
