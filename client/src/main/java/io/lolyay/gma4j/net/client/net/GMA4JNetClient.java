@@ -1,6 +1,7 @@
 package io.lolyay.gma4j.net.client.net;
 
 import io.lolyay.gma4j.net.client.ClientEventHandler;
+import io.lolyay.gma4j.net.client.GMA4JClient;
 import io.lolyay.gma4j.net.client.systemcodec.ClientDefaultSystemPacketCallback;
 import io.lolyay.gma4j.net.client.transport.ServerConnection;
 import io.lolyay.gma4j.net.codec.CodecRegistry;
@@ -36,6 +37,7 @@ public class GMA4JNetClient {
     private final Map<GmaAuthType, GmaAuthClient> authClients;
     private final IClientKnownCertificateKeeper knownCertificateKeeper;
     private final CodecRegistry codecRegistry;
+    private final GMA4JClient parent;
     private ClientEncryptionState clientEncryptionState;
 
     private ServerConnection serverConnection;
@@ -49,7 +51,7 @@ public class GMA4JNetClient {
     @Setter
     private volatile long lastPing = System.currentTimeMillis();
 
-    @Getter(AccessLevel.NONE)
+    @Getter
     private volatile boolean authenticated = false;
     @Getter(AccessLevel.NONE)
     private ScheduledExecutorService scheduler;

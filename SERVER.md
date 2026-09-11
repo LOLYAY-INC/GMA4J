@@ -6,7 +6,7 @@
 <dependency>
   <groupId>io.lolyay.gma4j</groupId>
   <artifactId>gma4j-server</artifactId>
-  <version>3.15.1</version>
+  <version>3.16.0</version>
 </dependency>
 ```
 

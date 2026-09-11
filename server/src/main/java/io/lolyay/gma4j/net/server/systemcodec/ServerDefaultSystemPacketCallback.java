@@ -3,6 +3,7 @@ package io.lolyay.gma4j.net.server.systemcodec;
 import io.lolyay.gma4j.net.codec.ClientType;
 import io.lolyay.gma4j.net.codec.CodecRegistry;
 import io.lolyay.gma4j.net.codec.auth.server.GmaAuthServer;
+import io.lolyay.gma4j.net.codec.connection.ConnectionState;
 import io.lolyay.gma4j.net.codec.encryption.server.ServerEncryptionState;
 import io.lolyay.gma4j.net.codec.packet.GMAPacket;
 import io.lolyay.gma4j.net.codec.systemcodec.c2s.C2SAuthPacket;
@@ -22,21 +23,42 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ServerDefaultSystemPacketCallback implements SystemPacketCallback {
     private final ClientOnServer client;
+    private ConnectionState connectionState = ConnectionState.HANDSHAKE;
 
     @Override
     public <T extends GMAPacket<T>> void onSystemPacket(T packet) {
+        if(packet instanceof C2SKeepAlivePacket(long id)) {
+            client.send(new S2CKeepAlivePacket(id));
+            return;
+        }
+
+        if(packet instanceof C2SModeRequestPacket modeRequestPacket) {
+            onC2SModeRequest(modeRequestPacket);
+            return;
+        }
+
+
+        // Auth
+        if(client.isAuthenticated()) {
+            log.warn("Received packet {} from authenticated client {}", packet, client.getRemoteId());
+            return;
+        }
+
         switch ((GMAPacket<?>) packet) {
             case C2SHelloPacket c2SHelloPacket -> onC2SHello(c2SHelloPacket);
             case C2SAuthPacket c2SAuthPacket -> onC2SAuth(c2SAuthPacket);
             case C2SAuthResponsePacket c2SAuthResponsePacket -> onC2SAuthResponse(c2SAuthResponsePacket);
-            case C2SKeepAlivePacket c2SKeepAlivePacket -> client.send(new S2CKeepAlivePacket(c2SKeepAlivePacket.id()));
-            case C2SModeRequestPacket c2SModeRequestPacket -> onC2SModeRequest(c2SModeRequestPacket);
-
             default -> throw new IllegalStateException("Unexpected value: " + packet);
         }
     }
 
     private void onC2SHello(C2SHelloPacket packet) {
+        if(connectionState != ConnectionState.HANDSHAKE) {
+            log.error("Client {} sent hello packet while not in handshake state", client.getRemoteId());
+            client.disconnect("Handshake failure");
+            return;
+        }
+
         String compatError = client.verifyCompatibility(packet);
         client.setClientType(packet.clientType());
         if(compatError != null) {
@@ -77,6 +99,7 @@ public class ServerDefaultSystemPacketCallback implements SystemPacketCallback {
             client.disconnect("Handshake failure");
             return;
         }
+        connectionState = ConnectionState.AUTH_CHALLENGE;
 
         client.send(hello);
         client.getPipeline().setCryptor(client.getEncryptionState().createPacketCryptor());
@@ -84,6 +107,12 @@ public class ServerDefaultSystemPacketCallback implements SystemPacketCallback {
     }
 
     private void onC2SAuth(C2SAuthPacket packet) {
+        if(connectionState != ConnectionState.AUTH_CHALLENGE) {
+            log.error("Client {} sent auth packet while not in auth state", client.getRemoteId());
+            client.disconnect("Handshake failure");
+            return;
+        }
+
         if(client.getSelectedAuthServer() == null || client.getSelectedAuthServer().authType() != packet.authType()) {
             log.error("Client {} sent auth packet for unsupported auth type {}", client.getRemoteId(), packet.authType());
             client.disconnect("Unsupported auth type");
@@ -99,10 +128,17 @@ public class ServerDefaultSystemPacketCallback implements SystemPacketCallback {
 
         byte[] challenge = authServer.createChallenge(pendingAuthID, packet.claimedClientId(), packet.extraAuthData());
         client.setPendingChallenge(challenge);
+        connectionState = ConnectionState.AWAITING_AUTH_RESPONSE;
         client.send(new S2CAuthChallengePacket(challenge, pendingAuthID));
     }
 
     private void onC2SAuthResponse(C2SAuthResponsePacket packet) {
+        if(connectionState != ConnectionState.AWAITING_AUTH_RESPONSE) {
+            log.error("Client {} sent auth response while not in auth state", client.getRemoteId());
+            client.disconnect("Handshake failure");
+            return;
+        }
+
         GmaAuthServer authServer = client.getSelectedAuthServer();
 
         if(authServer == null || client.getPendingChallenge() == null) {
@@ -140,6 +176,7 @@ public class ServerDefaultSystemPacketCallback implements SystemPacketCallback {
         }
 
         client.setAuthenticated(true);
+        connectionState = ConnectionState.CONNECTED;
         client.send(new S2CAuthStatusPacket(true));
         log.info("Client authenticated: {} ({})", client.getClaimedClientId(), client.getAssignedId());
         client.getNetServer().getEventHandler().onClientAuthenticated(client);
