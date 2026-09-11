@@ -18,13 +18,31 @@ public class ClientDefaultSystemPacketCallback implements SystemPacketCallback {
 
     @Override
     public <T extends GMAPacket<T>> void onSystemPacket(T packet) {
+
+        if(packet instanceof S2CKeepAlivePacket(long id)) {
+            netClient.onKeepAlive();
+            return;
+        }
+
+        if(packet instanceof S2CCodecStateUpdatePacket) {
+            log.warn("Received codec state update packet, even tho we are Java?");
+            return;
+        }
+
+        if(netClient.isAuthenticated()) {
+            if(netClient.getParent().allowReAuth)
+                log.info("Reauthenticating");
+            else {
+                log.warn("Server sent auth packet while authenticated, but reauth is disabled");
+                return;
+            }
+        }
+
+        // Auth
         switch ((GMAPacket<?>) packet) {
             case S2CHelloPacket s2cHelloPacket -> onS2CHello(s2cHelloPacket);
             case S2CAuthChallengePacket s2CAuthChallengePacket -> onS2CAuthChallenge(s2CAuthChallengePacket);
             case S2CAuthStatusPacket s2CAuthStatusPacket -> onAuthStatus(s2CAuthStatusPacket);
-            case S2CKeepAlivePacket s2CKeepAlivePacket -> netClient.onKeepAlive();
-            case S2CCodecStateUpdatePacket codecStateUpdatePacket -> log.warn("Received codec state update packet, even tho we are Java?");
-
             default -> throw new IllegalStateException("Unexpected value: " + packet);
         }
     }

@@ -15,7 +15,9 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
+@Setter
 public class GMA4JClient {
+    public boolean allowReAuth = false;
     private final CodecRegistry codecRegistry = CodecRegistry.getInstance();
     @Getter
     private final ClientEventHandler clientEventHandler;
@@ -33,9 +35,10 @@ public class GMA4JClient {
 
     public void connect(ClientConnectionInfo clientConnectionInfo) {
         this.netClient = new GMA4JNetClient(clientEventHandler, clientConnectionInfo.clientId(), Arrays.stream(clientConnectionInfo.authClients())
-                .collect(Collectors.toMap(GmaAuthClient::authType, Function.identity())), knownCertificateKeeper, codecRegistry);
+                .collect(Collectors.toMap(GmaAuthClient::authType, Function.identity())), knownCertificateKeeper, codecRegistry, this);
         netClient.connect(clientConnectionInfo.uri().toString());
     }
+
 
     public <T extends GMAPacket<T>> void send(T packet) {
         netClient.send(packet);

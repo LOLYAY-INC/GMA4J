@@ -42,25 +42,25 @@ A typical client app depends on `gma4j-client` plus `gma4j-ws` and/or `gma4j-net
 <dependency>
   <groupId>io.lolyay.gma4j</groupId>
   <artifactId>gma4j-client</artifactId>
-  <version>3.15.1</version>
+  <version>3.16.0</version>
 </dependency>
 <dependency>
   <groupId>io.lolyay.gma4j</groupId>
   <artifactId>gma4j-ws</artifactId>
-  <version>3.15.1</version>
+  <version>3.16.0</version>
 </dependency>
 
 <!-- Server -->
 <dependency>
   <groupId>io.lolyay.gma4j</groupId>
   <artifactId>gma4j-server</artifactId>
-  <version>3.15.1</version>
+  <version>3.16.0</version>
 </dependency>
 ```
 
 ## Integration responsibilities
 
-GMA4J 3.15.1 keeps these application concerns outside the library:
+GMA4J 3.16.0 keeps these application concerns outside the library:
 
 - `GmaApiECCAuthServer` verifies one fixed public key. Resolve per-user keys with a custom `GmaAuthServer`.
 - `GmaAuthServer.verifyClientResponse` does not receive the earlier `extraAuthData`; use the claimed client ID or retain attempt context in the backend.

@@ -24,12 +24,22 @@ public class ServerDefaultSystemPacketCallback implements SystemPacketCallback {
 
     @Override
     public <T extends GMAPacket<T>> void onSystemPacket(T packet) {
+        if(packet instanceof C2SKeepAlivePacket(long id)) {
+            client.send(new S2CKeepAlivePacket(id));
+            return;
+        }
+
+
+        // Auth
+        if(client.isAuthenticated()) {
+            log.warn("Received packet {} from authenticated client {}", packet, client.getRemoteId());
+            return;
+        }
+
         switch ((GMAPacket<?>) packet) {
             case C2SHelloPacket c2SHelloPacket -> onC2SHello(c2SHelloPacket);
             case C2SAuthPacket c2SAuthPacket -> onC2SAuth(c2SAuthPacket);
             case C2SAuthResponsePacket c2SAuthResponsePacket -> onC2SAuthResponse(c2SAuthResponsePacket);
-            case C2SKeepAlivePacket c2SKeepAlivePacket -> client.send(new S2CKeepAlivePacket(c2SKeepAlivePacket.id()));
-
             default -> throw new IllegalStateException("Unexpected value: " + packet);
         }
     }
