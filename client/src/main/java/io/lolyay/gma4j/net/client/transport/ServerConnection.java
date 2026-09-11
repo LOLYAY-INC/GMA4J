@@ -31,12 +31,35 @@ public class ServerConnection implements ClientConnectionListener { // client ha
     private volatile boolean isConnected = false;
 
     public synchronized <T extends GMAPacket<T>> void send(T data) {
-        if(messageSender == null || !isConnected) {
+        MessageSender sender = messageSender;
+        if(sender == null || !isConnected) {
             log.warn("Cannot send packet, connection is not established");
             return;
         }
         byte[] packet = pipeline.encode(data);
-        messageSender.send(packet);
+        try {
+            if (!sender.send(packet)) {
+                closeAfterSendFailure(sender, null);
+            }
+        } catch (RuntimeException failure) {
+            closeAfterSendFailure(sender, failure);
+            throw failure;
+        }
+    }
+
+    private void closeAfterSendFailure(MessageSender sender, RuntimeException failure) {
+        if (messageSender == sender) {
+            isConnected = false;
+        }
+        try {
+            sender.close();
+        } catch (RuntimeException closeFailure) {
+            if (failure != null) {
+                failure.addSuppressed(closeFailure);
+            } else {
+                log.error("Failed to close connection after an outbound send failure", closeFailure);
+            }
+        }
     }
 
     @Override
@@ -74,8 +97,8 @@ public class ServerConnection implements ClientConnectionListener { // client ha
     @Override
     public void onConnectionClosed(String reason) {
         log.info("Connection closed with {}", uri);
-        connectionStateCallback.onConnectionClosed(reason);
         isConnected = false;
+        connectionStateCallback.onConnectionClosed(reason);
 
     }
 

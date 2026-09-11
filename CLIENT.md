@@ -168,6 +168,12 @@ client.isConnected();     // true while the socket is up
 client.disconnect();      // clean shutdown
 ```
 
+## Durable evidence delivery
+
+Add the optional `gma4j-delivery` module for persisted evidence, receipt ACKs, and replay after reconnect. Register its packet types before connecting, and attach a delivery session only from `onAuthSuccess()`. Use a stable server identity backed by certificate pinning. Detach the session on disconnect, then reattach it after the next successful authentication.
+
+A receipt ACK means the server committed the evidence to its inbox. It does not mean the application processed it. Ordinary `client.send(packet)` remains non-durable. See [durable delivery](README.md#durable-evidence-delivery) for the storage contract and integration example.
+
 ## Keepalive and timeouts
 
 The client automatically:
