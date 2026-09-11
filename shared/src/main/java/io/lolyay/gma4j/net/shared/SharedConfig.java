@@ -8,6 +8,8 @@ public class SharedConfig {
     public static CodecType DEFAULT_CODEC_TYPE = CodecType.JSON_GSON; //gmtd soon
     public static boolean FORCE_CODEC = false;
     public static int MAX_PACKET_SIZE = 1024 * 1024;
+    public static int MAX_PENDING_OUTBOUND_BYTES = 8 * 1024 * 1024;
+    public static int MAX_PENDING_OUTBOUND_PACKETS = 256;
     public static int MAX_OUT_OF_ORDER = 3;
     public static int MAX_DECODE_ERRORS = 3;
     public static int NETWORK_THREADS = 4;

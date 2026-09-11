@@ -126,6 +126,18 @@ server.stop();
 
 > Each client has a **claimed id**, and a **UUID** assigned by the server.
 
+## Connection limits
+
+The server starts `SharedConfig.AUTH_HANDSHAKE_TIMEOUT_MS` when a GMA4J transport connection opens. The default is 10 seconds. Successful authentication cancels the deadline. Closing the connection or stopping the server cancels pending tasks and removes pending clients. This deadline covers the GMA4J handshake, not an upstream proxy's TLS or HTTP upgrade.
+
+Both server transports bound pending outbound bytes and packet count. Overflow and write failure close the connection. A completed local write is not a remote receipt ACK. See [durable delivery](README.md#durable-evidence-delivery) for queue settings and durable replay.
+
+## Durable evidence delivery
+
+The optional `gma4j-delivery` module persists received evidence before ACKing it. Register its packet types before starting the server, attach a peer-bound session from `onClientAuthenticated`, and route its packets through that connection's session. Use an identity your auth backend actually binds to credentials, not a bare claimed name or the reconnect-specific assigned UUID.
+
+Process the durable inbox separately, then mark records processed. This retains deduplication tombstones. Keep the store across server restarts; deleting it also deletes receipt evidence and deduplication history. See [durable delivery](README.md#durable-evidence-delivery) for usage and storage limits.
+
 ## Connection modes
 
 Authenticated clients can request **low latency** and/or **big size** mode at runtime (see CLIENT.md). The server decides what to grant:
