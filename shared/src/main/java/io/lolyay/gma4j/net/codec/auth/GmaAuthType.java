@@ -10,8 +10,10 @@ public enum GmaAuthType {
 
 
     API_KEY(0),
+    JWT(50),
     HMAC_SHA256(100),
     ECC_ECDSA(200),
+
 
 
     CUSTOM(Integer.MAX_VALUE); // always highest

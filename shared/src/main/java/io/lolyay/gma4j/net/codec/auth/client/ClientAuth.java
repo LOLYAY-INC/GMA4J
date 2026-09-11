@@ -24,7 +24,6 @@ public final class ClientAuth {
         return GmaHMACKeyAuth.of(secret);
     }
 
-
     /**
      * Creates a new {@link GmaECCKeyAuth} instance from a PEM encoded ECDSA private key.
      *
