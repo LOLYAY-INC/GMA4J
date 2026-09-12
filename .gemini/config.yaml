@@ -1,0 +1,15 @@
+have_fun: false                       # no poems in PR summaries
+
+code_review:
+  disable: false
+  comment_severity_threshold: HIGH    # only HIGH/CRITICAL inline comments (LOW is the default and very chatty)
+  max_review_comments: 10             # hard cap per review; -1 = unlimited
+  pull_request_opened:
+    help: false                       # don't post the /gemini help comment on every PR
+    summary: false                    # skip the PR summary — CodeRabbit already posts one
+    code_review: true                 # do auto-review on open
+
+ignore_patterns:
+  - "**/target/**"                    # Maven build output
+  - "**/*.lock"
+  - "**/generated/**"
