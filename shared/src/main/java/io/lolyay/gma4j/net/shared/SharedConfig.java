@@ -12,8 +12,9 @@ public class SharedConfig {
     public static int MAX_PENDING_OUTBOUND_PACKETS = 256;
     public static int MAX_OUT_OF_ORDER = 3;
     public static int MAX_DECODE_ERRORS = 3;
-    public static int NETWORK_THREADS = 4;
+    public static int NETWORK_THREADS = 4; // transport threads, packet handlers run on them
     public static int MAX_JSON_NESTING_DEPTH = 256; // recursive JSON must not reach the stack limit
+    public static long MAX_INBOUND_PROCESSING_BYTES = 256L * 1024 * 1024; // server wide frame bytes in decode or dispatch at once
 
     // Compression
     public static boolean REJECT_COMPRESSED_PACKETS = false;

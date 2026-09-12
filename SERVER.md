@@ -134,6 +134,8 @@ The server starts `SharedConfig.AUTH_HANDSHAKE_TIMEOUT_MS` when a GMA4J transpor
 
 Both server transports bound pending outbound bytes and packet count. Overflow and write failure close the connection. A completed local write is not a remote receipt ACK. See [durable delivery](README.md#durable-evidence-delivery) for queue settings and durable replay.
 
+Packet handlers run on the `SharedConfig.NETWORK_THREADS` transport threads (4 by default, must be positive), so at most that many frames are decoded at once. `SharedConfig.MAX_INBOUND_PROCESSING_BYTES` (256 MiB default) caps the frame bytes in decode or dispatch across all connections; a connection whose frame does not fit is dropped. Decoding holds a few copies of a frame transiently and decompression may expand it up to the connection's receive limit, so plan heap for a small multiple of this cap.
+
 ## Durable evidence delivery
 
 The optional `gma4j-delivery` module persists received evidence before ACKing it. Register its packet types before starting the server, attach a peer-bound session from `onClientAuthenticated`, and route its packets through that connection's session. Use an identity your auth backend actually binds to credentials, not a bare claimed name or the reconnect-specific assigned UUID.
