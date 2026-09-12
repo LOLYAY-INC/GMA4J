@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -108,8 +109,28 @@ class WebSocketFrameGuardTest {
         assertEquals(OK, guard.inspect(buffer));
     }
 
+    /** The retried header may have started in an earlier read, only its tail is in this buffer */
+    @Test
+    void retryOfCarriedOverHeaderStaysAligned() {
+        AtomicInteger limit = new AtomicInteger(16);
+        WebSocketFrameGuard guard = new WebSocketFrameGuard(limit::get);
+        byte[] big = frame(BINARY, true, 300, true);
+        byte[] wire = concat(big, frame(BINARY, true, 10, true));
+        int split = 5; // inside the 8 byte header
+        assertEquals(OK, guard.inspect(ByteBuffer.wrap(wire, 0, split)));
+
+        ByteBuffer rest = ByteBuffer.wrap(wire, split, wire.length - split);
+        assertEquals(split, guard.inspect(rest));
+        limit.set(300);
+        assertEquals(OK, guard.inspect(rest));
+        assertEquals(0, guard.inspect(ByteBuffer.wrap(header(BINARY, true, 301, true))));
+    }
+
+    /** Payload bytes look like a 64 bit length header, so any misalignment shows up */
     private static byte[] frame(int opcode, boolean fin, int payload, boolean masked) {
-        return concat(header(opcode, fin, payload, masked), new byte[payload]);
+        byte[] body = new byte[payload];
+        Arrays.fill(body, (byte) 0xFF);
+        return concat(header(opcode, fin, payload, masked), body);
     }
 
     private static byte[] header(int opcode, boolean fin, long payload, boolean masked) {
