@@ -1,6 +1,5 @@
 package io.lolyay.gma4j.codec;
 
-import io.lolyay.gma4j.net.codec.PacketCodingException;
 import io.lolyay.gma4j.net.codec.connection.WebSocketFrameGuard;
 import org.junit.jupiter.api.Test;
 
@@ -8,22 +7,22 @@ import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class WebSocketFrameGuardTest {
 
     private static final int BINARY = 0x2;
     private static final int CONTINUATION = 0x0;
     private static final int PING = 0x9;
+    private static final int OK = -1;
 
     @Test
     void framesWithinLimitPassAndLeavePositionUntouched() {
         WebSocketFrameGuard guard = new WebSocketFrameGuard(() -> 1024);
         ByteBuffer buffer = ByteBuffer.wrap(concat(frame(BINARY, true, 10, true), frame(BINARY, true, 300, false)));
-        buffer.position(0);
-        assertDoesNotThrow(() -> guard.inspect(buffer));
+        assertEquals(OK, guard.inspect(buffer));
         assertEquals(0, buffer.position());
     }
 
@@ -31,17 +30,24 @@ class WebSocketFrameGuardTest {
     void oversizedHeaderIsRejectedBeforeAnyPayloadArrives() {
         WebSocketFrameGuard guard = new WebSocketFrameGuard(() -> 1024);
         byte[] header = header(BINARY, true, 1025, false);
-        assertThrows(PacketCodingException.class, () -> guard.inspect(ByteBuffer.wrap(header)));
+        assertEquals(0, guard.inspect(ByteBuffer.wrap(header)));
+        assertNotNull(guard.rejection());
+    }
+
+    @Test
+    void rejectionReportsTheOffendingHeaderPosition() {
+        WebSocketFrameGuard guard = new WebSocketFrameGuard(() -> 64);
+        byte[] small = frame(BINARY, true, 40, true);
+        byte[] wire = concat(small, header(BINARY, true, 65, true));
+        assertEquals(small.length, guard.inspect(ByteBuffer.wrap(wire)));
     }
 
     @Test
     void sixtyFourBitLengthIsBounded() {
         WebSocketFrameGuard guard = new WebSocketFrameGuard(() -> 1 << 20);
-        assertThrows(PacketCodingException.class,
-                () -> guard.inspect(ByteBuffer.wrap(header(BINARY, true, 1L << 40, true))));
+        assertEquals(0, guard.inspect(ByteBuffer.wrap(header(BINARY, true, 1L << 40, true))));
         WebSocketFrameGuard negative = new WebSocketFrameGuard(() -> 1 << 20);
-        assertThrows(PacketCodingException.class,
-                () -> negative.inspect(ByteBuffer.wrap(header(BINARY, true, Long.MIN_VALUE, true))));
+        assertEquals(0, negative.inspect(ByteBuffer.wrap(header(BINARY, true, Long.MIN_VALUE, true))));
     }
 
     @Test
@@ -49,11 +55,9 @@ class WebSocketFrameGuardTest {
         WebSocketFrameGuard guard = new WebSocketFrameGuard(() -> 100);
         byte[] header = header(BINARY, true, 200, true);
         for (int i = 0; i < header.length - 1; i++) {
-            byte[] single = {header[i]};
-            assertDoesNotThrow(() -> guard.inspect(ByteBuffer.wrap(single)));
+            assertEquals(OK, guard.inspect(ByteBuffer.wrap(new byte[]{header[i]})));
         }
-        byte[] last = {header[header.length - 1]};
-        assertThrows(PacketCodingException.class, () -> guard.inspect(ByteBuffer.wrap(last)));
+        assertEquals(0, guard.inspect(ByteBuffer.wrap(new byte[]{header[header.length - 1]})));
     }
 
     @Test
@@ -63,38 +67,45 @@ class WebSocketFrameGuardTest {
         // feed in odd sized chunks so payload and header boundaries never align with a read
         for (int offset = 0; offset < wire.length; offset += 7) {
             ByteBuffer chunk = ByteBuffer.wrap(wire, offset, Math.min(7, wire.length - offset));
-            assertDoesNotThrow(() -> guard.inspect(chunk));
+            assertEquals(OK, guard.inspect(chunk));
         }
-        assertThrows(PacketCodingException.class,
-                () -> guard.inspect(ByteBuffer.wrap(header(BINARY, true, 65, true))));
+        assertEquals(0, guard.inspect(ByteBuffer.wrap(header(BINARY, true, 65, true))));
     }
 
     @Test
     void fragmentsMustNotAddUpPastTheLimit() {
         WebSocketFrameGuard guard = new WebSocketFrameGuard(() -> 100);
-        assertDoesNotThrow(() -> guard.inspect(ByteBuffer.wrap(frame(BINARY, false, 60, false))));
-        assertDoesNotThrow(() -> guard.inspect(ByteBuffer.wrap(frame(PING, true, 5, false))));
-        assertThrows(PacketCodingException.class,
-                () -> guard.inspect(ByteBuffer.wrap(frame(CONTINUATION, true, 41, false))));
+        assertEquals(OK, guard.inspect(ByteBuffer.wrap(frame(BINARY, false, 60, false))));
+        assertEquals(OK, guard.inspect(ByteBuffer.wrap(frame(PING, true, 5, false))));
+        assertEquals(0, guard.inspect(ByteBuffer.wrap(frame(CONTINUATION, true, 41, false))));
+        assertTrue(guard.rejection().contains("message"));
     }
 
     @Test
     void finishedMessageResetsTheFragmentTotal() {
         WebSocketFrameGuard guard = new WebSocketFrameGuard(() -> 100);
-        assertDoesNotThrow(() -> guard.inspect(ByteBuffer.wrap(frame(BINARY, false, 60, false))));
-        assertDoesNotThrow(() -> guard.inspect(ByteBuffer.wrap(frame(CONTINUATION, true, 40, false))));
-        assertDoesNotThrow(() -> guard.inspect(ByteBuffer.wrap(frame(BINARY, true, 100, false))));
+        assertEquals(OK, guard.inspect(ByteBuffer.wrap(frame(BINARY, false, 60, false))));
+        assertEquals(OK, guard.inspect(ByteBuffer.wrap(frame(CONTINUATION, true, 40, false))));
+        assertEquals(OK, guard.inspect(ByteBuffer.wrap(frame(BINARY, true, 100, false))));
     }
 
+    /** A rejected header stays pending and is admitted once the limit covers it */
     @Test
-    void limitIsReadPerFrame() {
+    void rejectedHeaderIsAdmittedAfterTheLimitWasRaised() {
         AtomicInteger limit = new AtomicInteger(16);
         WebSocketFrameGuard guard = new WebSocketFrameGuard(limit::get);
-        assertThrows(PacketCodingException.class,
-                () -> guard.inspect(ByteBuffer.wrap(header(BINARY, true, 32, false))));
+        byte[] big = frame(BINARY, true, 32, false);
+        byte[] wire = concat(big, frame(BINARY, true, 40, false));
+        ByteBuffer buffer = ByteBuffer.wrap(wire);
+
+        assertEquals(0, guard.inspect(buffer));
+        assertEquals(0, guard.inspect(buffer), "still rejected while the limit is unchanged");
+
+        limit.set(32);
+        assertEquals(big.length, guard.inspect(buffer), "the next frame is now the one over the limit");
         limit.set(64);
-        assertDoesNotThrow(() -> new WebSocketFrameGuard(limit::get)
-                .inspect(ByteBuffer.wrap(frame(BINARY, true, 32, false))));
+        buffer.position(big.length);
+        assertEquals(OK, guard.inspect(buffer));
     }
 
     private static byte[] frame(int opcode, boolean fin, int payload, boolean masked) {

@@ -4,6 +4,7 @@ import io.lolyay.gma4j.net.codec.PacketCodingException;
 import io.lolyay.gma4j.net.codec.connection.client.ClientConnectionListener;
 import io.lolyay.gma4j.net.shared.SharedConfig;
 import io.lolyay.gma4j.net.transport.IClientTransport;
+import org.java_websocket.WebSocket;
 import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.framing.CloseFrame;
 import org.java_websocket.handshake.ServerHandshake;
@@ -29,8 +30,7 @@ public class WsClientTransport implements IClientTransport {
         FrameGuardedDraft draft = new FrameGuardedDraft(
                 Collections.emptyList(),
                 Collections.singletonList(new Protocol("")),
-                frameCap,
-                listener::maxIncomingFrameSize
+                frameCap
         );
 
         client = new WebSocketClient(uri,draft) {
@@ -69,6 +69,9 @@ public class WsClientTransport implements IClientTransport {
                 listener.onConnectionError(ex);
             }
         };
+        // the engine works on its own copy of the draft
+        WebSocket connection = client.getConnection();
+        ((FrameGuardedDraft) connection.getDraft()).bind(connection, listener::maxIncomingFrameSize);
         client.connect();
     }
 

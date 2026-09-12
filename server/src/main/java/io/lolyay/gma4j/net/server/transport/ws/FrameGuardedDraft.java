@@ -1,8 +1,9 @@
 package io.lolyay.gma4j.net.server.transport.ws;
 
-import io.lolyay.gma4j.net.codec.PacketCodingException;
 import io.lolyay.gma4j.net.codec.connection.WebSocketFrameGuard;
 import io.lolyay.gma4j.net.shared.SharedConfig;
+import org.java_websocket.WebSocket;
+import org.java_websocket.WebSocketImpl;
 import org.java_websocket.drafts.Draft;
 import org.java_websocket.drafts.Draft_6455;
 import org.java_websocket.exceptions.InvalidDataException;
@@ -18,32 +19,44 @@ import java.util.function.IntSupplier;
 
 /**
  * Draft whose inbound frame limit follows the connection instead of the
- * static cap. The copy the handshake creates is bound to its connection
- * through {@link #bind(IntSupplier)}.
+ * static cap. Frames are validated and handed over in order, so a mode
+ * grant raises the limit for the frames behind it in the same read.
+ * The copy the handshake creates is bound to its connection with {@link #bind}.
  */
 public final class FrameGuardedDraft extends Draft_6455 {
-    private volatile IntSupplier limit;
+    private volatile IntSupplier limit = () -> SharedConfig.MAX_PACKET_SIZE;
+    private volatile WebSocketImpl connection;
     private final WebSocketFrameGuard guard = new WebSocketFrameGuard(() -> limit.getAsInt());
 
     public FrameGuardedDraft(List<IExtension> extensions, List<IProtocol> protocols, int frameCap) {
-        this(extensions, protocols, frameCap, () -> SharedConfig.MAX_PACKET_SIZE);
-    }
-
-    private FrameGuardedDraft(List<IExtension> extensions, List<IProtocol> protocols, int frameCap, IntSupplier limit) {
         super(extensions, protocols, frameCap);
-        this.limit = limit;
     }
 
-    public void bind(IntSupplier limit) {
+    public void bind(WebSocket connection, IntSupplier limit) {
+        this.connection = (WebSocketImpl) connection;
         this.limit = limit;
     }
 
     @Override
     public List<Framedata> translateFrame(ByteBuffer buffer) throws InvalidDataException {
-        try {
-            guard.inspect(buffer);
-        } catch (PacketCodingException e) {
-            throw new LimitExceededException(e.getMessage(), limit.getAsInt());
+        int rejected = guard.inspect(buffer);
+        while (rejected >= 0) {
+            WebSocketImpl target = connection;
+            if (target == null) {
+                throw new LimitExceededException(guard.rejection(), limit.getAsInt());
+            }
+            // hand over the frames in front of the rejected one first, a grant among them may admit it
+            ByteBuffer head = buffer.duplicate();
+            head.limit(rejected);
+            for (Framedata frame : super.translateFrame(head)) {
+                processFrame(target, frame);
+            }
+            buffer.position(rejected);
+            int again = guard.inspect(buffer);
+            if (again == rejected) {
+                throw new LimitExceededException(guard.rejection(), limit.getAsInt());
+            }
+            rejected = again;
         }
         return super.translateFrame(buffer);
     }
@@ -58,6 +71,9 @@ public final class FrameGuardedDraft extends Draft_6455 {
         for (IProtocol protocol : getKnownProtocols()) {
             protocols.add(protocol.copyInstance());
         }
-        return new FrameGuardedDraft(extensions, protocols, getMaxFrameSize(), limit);
+        FrameGuardedDraft copy = new FrameGuardedDraft(extensions, protocols, getMaxFrameSize());
+        copy.limit = limit;
+        copy.connection = connection;
+        return copy;
     }
 }

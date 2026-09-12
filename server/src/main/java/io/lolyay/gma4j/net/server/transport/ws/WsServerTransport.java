@@ -104,7 +104,7 @@ public class WsServerTransport implements IServerTransport {
             public ServerHandshakeBuilder onWebsocketHandshakeReceivedAsServer(WebSocket conn, Draft draft, ClientHandshake request) throws InvalidDataException {
                 ServerHandshakeBuilder builder = super.onWebsocketHandshakeReceivedAsServer(conn, draft, request);
                 if (draft instanceof FrameGuardedDraft guarded) {
-                    guarded.bind(() -> incomingLimit(conn));
+                    guarded.bind(conn, () -> incomingLimit(conn));
                 }
                 if (data.useUpgradeRedirection() && data.upgradeUri() != null && requestsGma4jUpgrade(request)) {
                     builder.put(HEADER_GMA_URI, data.upgradeUri());
