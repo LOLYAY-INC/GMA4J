@@ -216,6 +216,8 @@ public class GMA4JNetClient {
             throw new IllegalArgumentException("requestedMaxPacketSize exceeds MAX_BIG_PACKET_SIZE");
         }
         if(bigSize) {
+            // the grant must stay sendable on our side, so never ask past the transport cap
+            requestedMaxPacketSize = Math.min(requestedMaxPacketSize, serverConnection.maxSupportedFrameSize());
             // raise the decoder allowance now so a grant in the same read is not cut off
             connectionSettings.raiseReceiveAllowance(requestedMaxPacketSize);
         }

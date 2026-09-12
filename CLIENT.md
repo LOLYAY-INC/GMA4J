@@ -199,7 +199,7 @@ client.requestModes(true, true, 8 * 1024 * 1024);
 The server grants what its policy and transport allow, so always read the actual values from `onModesChanged`:
 
 - **Low latency** disables outgoing compression, sets `TCP_NODELAY`, and unlocks `client.sendUrgent(packet)`, which bypasses any write coalescing.
-- **Big size** raises the per-packet limit above the base `SharedConfig.MAX_PACKET_SIZE` (1 MiB default), up to the granted `maxPacketSize`. The grant is capped by the server's `MAX_BIG_PACKET_SIZE`, a server-wide budget, and the transport: WebSocket frames are capped at the base size, so `bigSize` is never granted over `ws`/`wss`; use the `gma4j` (Netty) transport for big packets.
+- **Big size** raises the per-packet limit above the base `SharedConfig.MAX_PACKET_SIZE` (1 MiB default), up to the granted `maxPacketSize`. The grant is capped by the server's `MAX_BIG_PACKET_SIZE`, a server-wide budget, and the outbound queue on both sides: the request is clamped to what your transport can queue twice (`MAX_PENDING_OUTBOUND_BYTES / 2` minus framing, about 4 MiB by default), and the server applies the same rule for its own queue.
 
 Requests are rate limited server-side (1 per second); flooding mode requests disconnects the client.
 

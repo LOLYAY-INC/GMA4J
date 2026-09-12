@@ -5,7 +5,6 @@ import io.lolyay.gma4j.net.codec.connection.client.ClientConnectionListener;
 import io.lolyay.gma4j.net.shared.SharedConfig;
 import io.lolyay.gma4j.net.transport.IClientTransport;
 import org.java_websocket.client.WebSocketClient;
-import org.java_websocket.drafts.Draft_6455;
 import org.java_websocket.framing.CloseFrame;
 import org.java_websocket.handshake.ServerHandshake;
 import org.java_websocket.protocols.Protocol;
@@ -25,13 +24,14 @@ public class WsClientTransport implements IClientTransport {
 
     @Override
     public void connect(URI uri) {
-        int frameCap = SharedConfig.MAX_PACKET_SIZE;
-        Draft_6455 draft = new Draft_6455(
+        // static cap is the largest grant possible, the guard enforces the current allowance
+        int frameCap = Math.max(SharedConfig.MAX_PACKET_SIZE, SharedConfig.MAX_BIG_PACKET_SIZE);
+        FrameGuardedDraft draft = new FrameGuardedDraft(
                 Collections.emptyList(),
                 Collections.singletonList(new Protocol("")),
-                frameCap
+                frameCap,
+                listener::maxIncomingFrameSize
         );
-
 
         client = new WebSocketClient(uri,draft) {
             @Override

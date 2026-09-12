@@ -12,7 +12,6 @@ import io.lolyay.gma4j.net.server.GMA4JServer;
 import io.lolyay.gma4j.net.server.ServerBindInfo;
 import io.lolyay.gma4j.net.server.ServerEventHandler;
 import io.lolyay.gma4j.net.server.net.ClientOnServer;
-import io.lolyay.gma4j.net.shared.SharedConfig;
 import io.lolyay.gma4j.net.transport.TransportManager;
 import io.lolyay.gma4j.net.transport.netty.NettyClientTransportFactory;
 import io.lolyay.gma4j.net.transport.ws.WsClientTransportFactory;
@@ -31,13 +30,12 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ConnectionModesIntegrationTest {
 
-    private static final int BIG_REQUEST = 4 * 1024 * 1024;
+    private static final int BIG_REQUEST = 3 * 1024 * 1024;
     private static final int BIG_PAYLOAD = 2 * 1024 * 1024;
 
     @BeforeAll
@@ -50,7 +48,16 @@ class ConnectionModesIntegrationTest {
 
     @Test
     void bigUrgentPacketRoundTripsAfterGrant() throws Exception {
-        URI uri = URI.create("gma4j://127.0.0.1:" + freePort());
+        bigUrgentPacketRoundTripsAfterGrant("gma4j");
+    }
+
+    @Test
+    void webSocketHonorsBigSizeGrant() throws Exception {
+        bigUrgentPacketRoundTripsAfterGrant("ws");
+    }
+
+    private void bigUrgentPacketRoundTripsAfterGrant(String scheme) throws Exception {
+        URI uri = URI.create(scheme + "://127.0.0.1:" + freePort());
         String bigName = "x".repeat(BIG_PAYLOAD);
         CountDownLatch echoed = new CountDownLatch(1);
         AtomicReference<ClientGreetingPacket> echo = new AtomicReference<>();
@@ -73,7 +80,7 @@ class ConnectionModesIntegrationTest {
         };
 
         GMA4JServer server = new GMA4JServer(serverHandler, hostKey());
-        server.start(new ServerBindInfo(uri.getHost(), uri.getPort(), "gma4j", new GmaNoAuthServer()));
+        server.start(new ServerBindInfo(uri.getHost(), uri.getPort(), scheme, new GmaNoAuthServer()));
         ModeClient handler = new ModeClient(true, true, BIG_REQUEST, bigName, echo, echoed);
         GMA4JClient client = new GMA4JClient(handler);
         handler.client = client;
@@ -91,36 +98,6 @@ class ConnectionModesIntegrationTest {
             assertEquals(bigName, echo.get().clientName());
             assertTrue(serverGrant.await(5, TimeUnit.SECONDS));
             assertTrue(handler.errors.get() == null, () -> "Client error: " + handler.errors.get());
-        } finally {
-            try {
-                assertDoesNotThrow(client::disconnect);
-            } finally {
-                assertDoesNotThrow(server::stop);
-            }
-        }
-    }
-
-    @Test
-    void webSocketClampsBigSizeToBase() throws Exception {
-        URI uri = URI.create("ws://127.0.0.1:" + freePort());
-        GMA4JServer server = new GMA4JServer(new ServerEventHandler() {
-            @Override
-            public boolean handle(ClientOnServer client, GMAPacket<?> packet) {
-                return false;
-            }
-        }, hostKey());
-        server.start(new ServerBindInfo(uri.getHost(), uri.getPort(), "ws", new GmaNoAuthServer()));
-        ModeClient handler = new ModeClient(true, true, BIG_REQUEST, null, null, null);
-        GMA4JClient client = new GMA4JClient(handler);
-        handler.client = client;
-
-        try {
-            client.connect(new ClientConnectionInfo("ws-modes-client", uri, ClientAuth.none()));
-
-            assertTrue(handler.granted.await(20, TimeUnit.SECONDS), "no mode grant");
-            assertTrue(handler.grantedLowLatency);
-            assertFalse(handler.grantedBigSize, "big size must not be granted over ws");
-            assertEquals(SharedConfig.MAX_PACKET_SIZE, handler.grantedMaxPacketSize);
         } finally {
             try {
                 assertDoesNotThrow(client::disconnect);

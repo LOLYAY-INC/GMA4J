@@ -146,7 +146,7 @@ Authenticated clients can request **low latency** and/or **big size** mode at ru
 
 - `SharedConfig.ALLOW_LOW_LATENCY_MODE` / `ALLOW_BIG_SIZE_MODE` switch each mode off globally.
 - Big size grants are clamped to `SharedConfig.MAX_BIG_PACKET_SIZE` (32 MiB default) per client and drawn from a server-wide budget of `SharedConfig.BIG_SIZE_TOTAL_BUDGET` (256 MiB default); once the budget is exhausted further clients stay at the base packet size. Reservations are returned when the client disconnects.
-- WebSocket transports cannot exceed the base frame size, so big size is never granted over `ws`/`wss`.
+- Every transport clamps grants to what its outbound queue can carry twice (`MAX_PENDING_OUTBOUND_BYTES / 2` minus framing), so a granted packet is always sendable. The WebSocket transport enforces the current allowance per connection from the frame header; an unauthenticated peer cannot make the server buffer more than the base size.
 - Mode requests are rate limited (`MODE_CHANGE_MIN_INTERVAL_MS`); a client that keeps flooding them is disconnected.
 
 `onClientModeChanged(ClientOnServer client)` on your `ServerEventHandler` fires after a grant is applied. The server can also change a client's modes itself with `client.setModes(lowLatency, bigSize, maxPacketSize)`.
