@@ -7,6 +7,7 @@ import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.embedded.EmbeddedChannel;
+import io.netty.handler.codec.CorruptedFrameException;
 import io.netty.handler.codec.DecoderException;
 import org.junit.jupiter.api.Test;
 
@@ -95,6 +96,43 @@ class NettyFrameLimitTest {
                 assertEquals(List.of(16, 512), seen);
             } finally {
                 channel.finishAndReleaseAll();
+            }
+        }
+    }
+
+    /** An oversized header fails on its own, the payload must never be cumulated */
+    @Test
+    void oversizedHeaderFailsBeforePayloadAndDiscardsTheRest() {
+        for (Supplier<ChannelHandler> decoder : decoders()) {
+            EmbeddedChannel channel = new EmbeddedChannel(decoder.get());
+            try {
+                ByteBuf header = Unpooled.buffer();
+                writeVarInt(header, SharedConfig.MAX_PACKET_SIZE + 1);
+                assertThrows(DecoderException.class, () -> channel.writeInbound(header));
+
+                // whatever follows the bad header is dropped instead of parsed as new frames
+                assertFalse(channel.writeInbound(frame(16)));
+                assertNull(channel.readInbound());
+            } finally {
+                channel.finishAndReleaseAll();
+            }
+        }
+    }
+
+    @Test
+    void varintOverflowBitsAreCorrupt() {
+        for (Supplier<ChannelHandler> decoder : decoders()) {
+            for (int fifth : new int[]{0x08, 0x10, 0x80}) {
+                EmbeddedChannel channel = new EmbeddedChannel(decoder.get());
+                try {
+                    ByteBuf header = Unpooled.wrappedBuffer(new byte[]{
+                            (byte) 0x80, (byte) 0x80, (byte) 0x80, (byte) 0x80, (byte) fifth});
+                    DecoderException error = assertThrows(DecoderException.class,
+                            () -> channel.writeInbound(header));
+                    assertInstanceOf(CorruptedFrameException.class, error);
+                } finally {
+                    channel.finishAndReleaseAll();
+                }
             }
         }
     }
