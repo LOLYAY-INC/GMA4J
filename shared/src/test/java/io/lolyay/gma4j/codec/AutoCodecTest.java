@@ -1,5 +1,6 @@
 package io.lolyay.gma4j.codec;
 
+import com.google.gson.JsonParseException;
 import com.google.gson.JsonSyntaxException;
 import io.lolyay.gma4j.codec.fixtures.ComplexPacket;
 import io.lolyay.gma4j.codec.fixtures.LargeJsonPacket;
@@ -99,5 +100,60 @@ class AutoCodecTest {
         byte[] truncated = Arrays.copyOf(full, full.length / 2);
         assertThrows(JsonSyntaxException.class,
                 () -> ComplexPacket.TYPE.codec().deserialize(truncated, CodecType.JSON_GSON));
+    }
+
+    @Test
+    void trailingDataThrows() {
+        byte[] full = ComplexPacket.TYPE.codec().serialize(sample());
+        for (String trailer : new String[]{"{}", "[1]", "x", " 7"}) {
+            byte[] padded = concat(full, trailer.getBytes(StandardCharsets.UTF_8));
+            assertThrows(JsonParseException.class,
+                    () -> ComplexPacket.TYPE.codec().deserialize(padded, CodecType.JSON_GSON), trailer);
+        }
+        byte[] whitespace = concat(full, " \n\t".getBytes(StandardCharsets.UTF_8));
+        assertEquals(sample(), ComplexPacket.TYPE.codec().deserialize(whitespace, CodecType.JSON_GSON));
+    }
+
+    @Test
+    void nullAndEmptyDocumentsAreNotPackets() {
+        for (String json : new String[]{"null", "", "   "}) {
+            assertThrows(JsonParseException.class, () -> ComplexPacket.TYPE.codec()
+                    .deserialize(json.getBytes(StandardCharsets.UTF_8), CodecType.JSON_GSON), json);
+        }
+    }
+
+    @Test
+    void lenientSyntaxIsRejected() {
+        String[] lenient = {
+                "{name: \"a\"}",
+                "{'name': 'a'}",
+                "{\"name\": \"a\"} // comment",
+                "{\"name\": \"a\", \"i\": NaN}",
+                ")]}'\n{\"name\": \"a\"}",
+                "{\"name\": \"raw\ttab\"}",
+        };
+        for (String json : lenient) {
+            assertThrows(JsonParseException.class, () -> ComplexPacket.TYPE.codec()
+                    .deserialize(json.getBytes(StandardCharsets.UTF_8), CodecType.JSON_GSON), json);
+        }
+    }
+
+    @Test
+    void malformedUtf8IsRejected() {
+        byte[] json = "{\"name\": \"".getBytes(StandardCharsets.UTF_8);
+        byte[] broken = concat(concat(json, new byte[]{(byte) 0xC3, (byte) 0x28}),
+                "\"}".getBytes(StandardCharsets.UTF_8));
+        assertThrows(JsonParseException.class,
+                () -> ComplexPacket.TYPE.codec().deserialize(broken, CodecType.JSON_GSON));
+        byte[] loneSurrogate = concat(concat(json, new byte[]{(byte) 0xED, (byte) 0xA0, (byte) 0x80}),
+                "\"}".getBytes(StandardCharsets.UTF_8));
+        assertThrows(JsonParseException.class,
+                () -> ComplexPacket.TYPE.codec().deserialize(loneSurrogate, CodecType.JSON_GSON));
+    }
+
+    private static byte[] concat(byte[] first, byte[] second) {
+        byte[] joined = Arrays.copyOf(first, first.length + second.length);
+        System.arraycopy(second, 0, joined, first.length, second.length);
+        return joined;
     }
 }

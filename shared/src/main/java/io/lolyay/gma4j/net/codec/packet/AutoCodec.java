@@ -37,7 +37,7 @@ public final class AutoCodec<T extends GMAPacket<T>> extends ImplCodec<T> implem
     }
 
     private T jsonD(byte[] data) {
-        return GsonUtil.fromJsonBounded(new String(data, StandardCharsets.UTF_8), getClazz());
+        return GsonUtil.fromJsonBounded(data, getClazz());
     }
 
     @SneakyThrows
