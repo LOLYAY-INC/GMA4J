@@ -15,7 +15,6 @@ public class WsServerConnection implements MessageSender {
 
     private final WebSocketImpl connection;
     private final WebSocketOutboundBudget outboundBudget;
-    private final int frameCap;
 
     public WsServerConnection(WebSocket connection) {
         this(connection, SharedConfig.MAX_PACKET_SIZE);
@@ -27,12 +26,14 @@ public class WsServerConnection implements MessageSender {
             throw new IllegalArgumentException("Java-WebSocket 1.6 WebSocketImpl is required");
         }
         this.connection = webSocketConnection;
-        this.frameCap = frameCap;
+        // a frame is only sendable if the outbound budget can hold it twice
+        int sendableCap = Math.min(frameCap, WebSocketOutboundBudget.largestSendablePayload(
+                SharedConfig.MAX_PENDING_OUTBOUND_BYTES, false));
         this.outboundBudget = new WebSocketOutboundBudget(
                 webSocketConnection.outQueue,
                 SharedConfig.MAX_PENDING_OUTBOUND_BYTES,
                 SharedConfig.MAX_PENDING_OUTBOUND_PACKETS,
-                frameCap,
+                sendableCap,
                 false);
     }
 
@@ -55,8 +56,7 @@ public class WsServerConnection implements MessageSender {
 
     @Override
     public int maxSupportedFrameSize() {
-        // Draft frame cap is fixed at construction, so big size cannot grow past it
-        return frameCap;
+        return outboundBudget.maxPayloadBytes();
     }
 
     @Override

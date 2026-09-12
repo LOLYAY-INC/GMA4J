@@ -30,6 +30,9 @@ public class NettyServerTransport implements IServerTransport {
 
     @Override
     public void start() {
+        if (SharedConfig.NETWORK_THREADS < 1) {
+            throw new IllegalStateException("NETWORK_THREADS must be positive"); // 0 would let netty pick 2x cores
+        }
         bossGroup = new NioEventLoopGroup(1);
         workerGroup = new NioEventLoopGroup(SharedConfig.NETWORK_THREADS);
 

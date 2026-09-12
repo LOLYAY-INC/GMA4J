@@ -127,6 +127,11 @@ public class NettyClientConnection implements MessageSender {
     }
 
     @Override
+    public int maxSupportedFrameSize() {
+        return outboundBudget.maxPayloadBytes();
+    }
+
+    @Override
     public void close() {
         closing = true;
         channel.close();

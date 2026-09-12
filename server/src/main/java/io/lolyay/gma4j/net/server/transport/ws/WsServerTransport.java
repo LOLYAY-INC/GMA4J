@@ -8,7 +8,6 @@ import io.lolyay.gma4j.net.transport.IServerTransport;
 import io.lolyay.gma4j.net.transport.ServerTransportData;
 import org.java_websocket.WebSocket;
 import org.java_websocket.drafts.Draft;
-import org.java_websocket.drafts.Draft_6455;
 import org.java_websocket.exceptions.InvalidDataException;
 import org.java_websocket.framing.CloseFrame;
 import org.java_websocket.handshake.ClientHandshake;
@@ -33,8 +32,11 @@ public class WsServerTransport implements IServerTransport {
     private final WebSocketServer server;
 
     public WsServerTransport(ServerTransportData data, ServerClientHandler clientHandler) {
-        int frameCap = SharedConfig.MAX_PACKET_SIZE;
-        Draft_6455 draft = new Draft_6455(
+        // static cap is the largest grant possible, the per connection guard enforces the actual allowance
+        int frameCap = SharedConfig.ALLOW_BIG_SIZE_MODE
+                ? Math.max(SharedConfig.MAX_PACKET_SIZE, SharedConfig.MAX_BIG_PACKET_SIZE)
+                : SharedConfig.MAX_PACKET_SIZE;
+        FrameGuardedDraft draft = new FrameGuardedDraft(
                 Collections.emptyList(),
                 Collections.singletonList(new Protocol("")),
                 frameCap
@@ -63,7 +65,7 @@ public class WsServerTransport implements IServerTransport {
             @Override
             public void onMessage(WebSocket conn, ByteBuffer message) {
                 ServerConnectionListener listener = conn.getAttachment();
-                int limit = listener != null ? listener.maxIncomingFrameSize() : SharedConfig.MAX_PACKET_SIZE;
+                int limit = incomingLimit(conn);
                 if (message.remaining() > limit) {
                     PacketCodingException error = new PacketCodingException(
                             "Packet too large: " + message.remaining() + " > " + limit);
@@ -101,12 +103,21 @@ public class WsServerTransport implements IServerTransport {
             @Override
             public ServerHandshakeBuilder onWebsocketHandshakeReceivedAsServer(WebSocket conn, Draft draft, ClientHandshake request) throws InvalidDataException {
                 ServerHandshakeBuilder builder = super.onWebsocketHandshakeReceivedAsServer(conn, draft, request);
+                if (draft instanceof FrameGuardedDraft guarded) {
+                    guarded.bind(conn, () -> incomingLimit(conn));
+                }
                 if (data.useUpgradeRedirection() && data.upgradeUri() != null && requestsGma4jUpgrade(request)) {
                     builder.put(HEADER_GMA_URI, data.upgradeUri());
                 }
                 return builder;
             }
         };
+    }
+
+    /** Base limit until the listener is attached in onOpen */
+    private static int incomingLimit(WebSocket conn) {
+        ServerConnectionListener listener = conn.getAttachment();
+        return listener != null ? listener.maxIncomingFrameSize() : SharedConfig.MAX_PACKET_SIZE;
     }
 
     @Override

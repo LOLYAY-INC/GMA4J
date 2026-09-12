@@ -5,6 +5,7 @@ import io.lolyay.gma4j.net.codec.PacketPipeline;
 import io.lolyay.gma4j.net.codec.auth.server.GmaAuthServer;
 import io.lolyay.gma4j.net.codec.connection.MessageSender;
 import io.lolyay.gma4j.net.codec.connection.ConnectionSettings;
+import io.lolyay.gma4j.net.codec.connection.InboundBudget;
 import io.lolyay.gma4j.net.codec.connection.server.ServerConnectionListener;
 import io.lolyay.gma4j.net.codec.encryption.server.ServerEncryptionState;
 import io.lolyay.gma4j.net.codec.packet.GMAPacket;
@@ -211,8 +212,19 @@ public class ClientOnServer implements ServerConnectionListener, IPacketHandler 
 
     @Override
     public void onConnectionReceive(byte[] data) {
-        if(connected) {
+        if(!connected) {
+            return;
+        }
+        InboundBudget budget = netServer.getInboundBudget();
+        if(!budget.tryAcquire(data.length)) {
+            log.warn("Inbound processing budget exhausted, dropping {}", describe());
+            disconnect("Inbound processing budget exhausted");
+            return;
+        }
+        try {
             pipeline.decodeAndPassDown(data);
+        } finally {
+            budget.release(data.length);
         }
     }
 

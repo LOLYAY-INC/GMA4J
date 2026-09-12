@@ -12,8 +12,9 @@ public class SharedConfig {
     public static int MAX_PENDING_OUTBOUND_PACKETS = 256;
     public static int MAX_OUT_OF_ORDER = 3;
     public static int MAX_DECODE_ERRORS = 3;
-    public static int NETWORK_THREADS = 4;
+    public static int NETWORK_THREADS = 4; // transport threads, packet handlers run on them
     public static int MAX_JSON_NESTING_DEPTH = 256; // recursive JSON must not reach the stack limit
+    public static long MAX_INBOUND_PROCESSING_BYTES = 256L * 1024 * 1024; // server wide frame bytes in decode or dispatch at once
 
     // Compression
     public static boolean REJECT_COMPRESSED_PACKETS = false;
@@ -35,6 +36,11 @@ public class SharedConfig {
 
     // Admission
     public static int MAX_CONNECTIONS = 1024; // concurrent transport connections the server admits
+
+
+    // Session
+    public static int MAX_SESSION_PACKETS = 1 << 28; // per direction, keeps random GCM IVs far below the 2^32 bound and the int sequence from wrapping
+    public static long MAX_SESSION_AGE_MS = 24L * 60 * 60 * 1000; // key age, peers reconnect for fresh keys
 
 
     // Connection modes

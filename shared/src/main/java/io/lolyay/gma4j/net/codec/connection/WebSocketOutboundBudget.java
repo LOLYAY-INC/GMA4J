@@ -49,6 +49,28 @@ public final class WebSocketOutboundBudget {
         return fits(0, false);
     }
 
+    public int maxPayloadBytes() {
+        return maxPayloadBytes;
+    }
+
+    /**
+     * Largest payload the budget can carry twice, one frame held by the
+     * writer thread and one queued. Big size grants are clamped to this.
+     */
+    public static int largestSendablePayload(long maxPendingBytes, boolean masked) {
+        long frameBytes = maxPendingBytes / 2;
+        long overhead = masked ? 4 : 0;
+        long payload = frameBytes - overhead - 10;
+        if (payload > 65_535) {
+            return (int) Math.min(Integer.MAX_VALUE, payload);
+        }
+        payload = frameBytes - overhead - 4;
+        if (payload > 125) {
+            return (int) Math.min(65_535, payload);
+        }
+        return (int) Math.max(0, Math.min(125, frameBytes - overhead - 2));
+    }
+
     public static long frameCapacity(int payloadBytes, boolean masked) {
         if (payloadBytes < 0) {
             throw new IllegalArgumentException("Payload bytes cannot be negative");

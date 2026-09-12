@@ -3,6 +3,7 @@ package io.lolyay.gma4j.net.server.net;
 import io.lolyay.gma4j.net.codec.CodecRegistry;
 import io.lolyay.gma4j.net.codec.auth.GmaAuthType;
 import io.lolyay.gma4j.net.codec.auth.server.GmaAuthServer;
+import io.lolyay.gma4j.net.codec.connection.InboundBudget;
 import io.lolyay.gma4j.net.codec.connection.server.ServerClientHandler;
 import io.lolyay.gma4j.net.codec.connection.server.ServerConnectionListener;
 import io.lolyay.gma4j.net.codec.encryption.server.IServerCertificateProvider;
@@ -49,6 +50,7 @@ public class GMA4JNetServer implements ServerClientHandler {
     private final Object lifecycleMonitor = new Object();
     @Getter(AccessLevel.NONE)
     private final AtomicLong bigSizeBudgetUsed = new AtomicLong();
+    private final InboundBudget inboundBudget = new InboundBudget(() -> SharedConfig.MAX_INBOUND_PROCESSING_BYTES);
 
     @Getter(AccessLevel.NONE)
     private ScheduledExecutorService handshakeScheduler;

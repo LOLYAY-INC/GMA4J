@@ -26,7 +26,7 @@ public class NettyClientTransport implements IClientTransport {
     public void connect(URI uri) {
         String host = uri.getHost();
         int port = uri.getPort();
-        group = new NioEventLoopGroup();
+        group = new NioEventLoopGroup(1); // one channel, one thread
 
         Bootstrap bootstrap = new Bootstrap();
         bootstrap.group(group)

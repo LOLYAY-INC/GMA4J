@@ -159,7 +159,8 @@ public class GMA4JNetClient {
             transport.close();
         }
         if(pipeline != null) {
-            pipeline.close();
+            // the pipeline itself may be closing us from inside send, so do not wait for a handler
+            pipeline.requestClose();
         }
         return true;
     }
@@ -216,6 +217,8 @@ public class GMA4JNetClient {
             throw new IllegalArgumentException("requestedMaxPacketSize exceeds MAX_BIG_PACKET_SIZE");
         }
         if(bigSize) {
+            // the grant must stay sendable on our side, so never ask past the transport cap
+            requestedMaxPacketSize = Math.min(requestedMaxPacketSize, serverConnection.maxSupportedFrameSize());
             // raise the decoder allowance now so a grant in the same read is not cut off
             connectionSettings.raiseReceiveAllowance(requestedMaxPacketSize);
         }

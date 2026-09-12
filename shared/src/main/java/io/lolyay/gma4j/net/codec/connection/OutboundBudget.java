@@ -39,6 +39,16 @@ public final class OutboundBudget {
         return pendingPackets;
     }
 
+    /** Largest payload the budget can hold twice, big size grants are clamped to this */
+    public int maxPayloadBytes() {
+        return largestSendablePayload(maxPendingBytes);
+    }
+
+    public static int largestSendablePayload(long maxPendingBytes) {
+        long payload = maxPendingBytes / 2 - 5; // worst case varint prefix
+        return (int) Math.max(0, Math.min(Integer.MAX_VALUE, payload));
+    }
+
     public static long protobufFrameBytes(int payloadBytes) {
         if (payloadBytes < 0) {
             throw new IllegalArgumentException("Payload bytes cannot be negative");
