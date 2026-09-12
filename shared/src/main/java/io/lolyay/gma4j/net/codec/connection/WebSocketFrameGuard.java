@@ -17,6 +17,7 @@ public final class WebSocketFrameGuard {
     private final IntSupplier limit;
     private final byte[] header = new byte[MAX_HEADER_BYTES];
     private int headerBytes;
+    private int pendingHeaderBytes; // bytes of a rejected header that sit at the reported position
     private long payloadRemaining;
     private long messageBytes;
     private String rejection;
@@ -29,13 +30,22 @@ public final class WebSocketFrameGuard {
      * Walks the bytes from the buffer position, which is left untouched.
      * Returns the position of the first frame header over the limit or -1;
      * a header carried over from an earlier read reports the entry position.
+     * Inspecting again from that position retries the rejected header.
      */
     public int inspect(ByteBuffer buffer) {
         int position = buffer.position();
         int end = buffer.limit();
         int headerStart = position;
+        if (headerComplete()) {
+            // retry of a rejected header, its bytes in this buffer were already consumed
+            if (!admit()) {
+                return headerStart;
+            }
+            position += pendingHeaderBytes;
+        }
         while (true) {
             if (headerComplete() && !admit()) {
+                pendingHeaderBytes = position - headerStart;
                 return headerStart;
             }
             if (position >= end) {

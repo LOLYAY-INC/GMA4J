@@ -130,7 +130,9 @@ class WsFrameLimitTest {
         if (masked) {
             out.writeBytes(new byte[4]);
         }
-        out.writeBytes(new byte[payload]);
+        byte[] body = new byte[payload]; // non zero so a misaligned guard reads it as a header
+        Arrays.fill(body, (byte) 0xFF);
+        out.writeBytes(body);
         return out.toByteArray();
     }
 
