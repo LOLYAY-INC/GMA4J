@@ -44,19 +44,19 @@ A typical client app depends on `gma4j-client` plus `gma4j-ws` and/or `gma4j-net
 <dependency>
   <groupId>io.lolyay.gma4j</groupId>
   <artifactId>gma4j-client</artifactId>
-  <version>3.16.0</version>
+  <version>3.17.0</version>
 </dependency>
 <dependency>
   <groupId>io.lolyay.gma4j</groupId>
   <artifactId>gma4j-ws</artifactId>
-  <version>3.16.0</version>
+  <version>3.17.0</version>
 </dependency>
 
 <!-- Server -->
 <dependency>
   <groupId>io.lolyay.gma4j</groupId>
   <artifactId>gma4j-server</artifactId>
-  <version>3.16.0</version>
+  <version>3.17.0</version>
 </dependency>
 ```
 
@@ -85,7 +85,7 @@ The optional `gma4j-delivery` module adds a file-backed inbox and outbox. An ACK
 <dependency>
   <groupId>io.lolyay.gma4j</groupId>
   <artifactId>gma4j-delivery</artifactId>
-  <version>3.16.0</version>
+  <version>3.17.0</version>
 </dependency>
 ```
 
