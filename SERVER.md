@@ -130,6 +130,8 @@ server.stop();
 
 ## Connection limits
 
+Every session is bounded: a direction that reaches `SharedConfig.MAX_SESSION_PACKETS` (2^28 by default) or a key older than `MAX_SESSION_AGE_MS` (24h) closes the connection, which keeps the random AES-GCM IVs far from their collision bound and the sequence counters from wrapping. Clients reconnect for fresh keys.
+
 The server starts `SharedConfig.AUTH_HANDSHAKE_TIMEOUT_MS` when a GMA4J transport connection opens. The default is 10 seconds. Successful authentication cancels the deadline. Closing the connection or stopping the server cancels pending tasks and removes pending clients. This deadline covers the GMA4J handshake, not an upstream proxy's TLS or HTTP upgrade.
 
 Both server transports bound pending outbound bytes and packet count. Overflow and write failure close the connection. A completed local write is not a remote receipt ACK. See [durable delivery](README.md#durable-evidence-delivery) for queue settings and durable replay.

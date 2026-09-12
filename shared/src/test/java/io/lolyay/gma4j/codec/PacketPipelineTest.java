@@ -348,6 +348,82 @@ class PacketPipelineTest {
         }
     }
 
+    @Test
+    void sessionPacketLimitClosesSender() {
+        int max = SharedConfig.MAX_SESSION_PACKETS;
+        AtomicInteger closes = new AtomicInteger();
+        try {
+            SharedConfig.MAX_SESSION_PACKETS = 2;
+            PacketPipeline sender = new PacketPipeline(closes::incrementAndGet, noopDistributor());
+            sender.encode(new TinyPacket(1));
+            sender.encode(new TinyPacket(2));
+            assertThrows(IllegalStateException.class, () -> sender.encode(new TinyPacket(3)));
+            assertEquals(1, closes.get());
+            assertThrows(IllegalStateException.class, () -> sender.encode(new TinyPacket(4)));
+            assertEquals(1, closes.get());
+        } finally {
+            SharedConfig.MAX_SESSION_PACKETS = max;
+        }
+    }
+
+    @Test
+    void sessionPacketLimitClosesReceiver() {
+        int max = SharedConfig.MAX_SESSION_PACKETS;
+        AtomicInteger closes = new AtomicInteger();
+        try {
+            PacketPipeline sender = pipeline();
+            byte[] first = sender.encode(new TinyPacket(1));
+            byte[] second = sender.encode(new TinyPacket(2));
+            byte[] third = sender.encode(new TinyPacket(3));
+
+            SharedConfig.MAX_SESSION_PACKETS = 2;
+            PacketPipeline receiver = new PacketPipeline(closes::incrementAndGet, noopDistributor());
+            assertEquals(new TinyPacket(1), receiver.decode(first));
+            assertEquals(new TinyPacket(2), receiver.decode(second));
+            assertNull(receiver.decode(third));
+            assertEquals(1, closes.get());
+            assertThrows(IllegalStateException.class, () -> receiver.decode(third));
+        } finally {
+            SharedConfig.MAX_SESSION_PACKETS = max;
+        }
+    }
+
+    @Test
+    void expiredKeyClosesBothDirections() throws Exception {
+        long maxAge = SharedConfig.MAX_SESSION_AGE_MS;
+        AtomicInteger closes = new AtomicInteger();
+        try {
+            SharedConfig.MAX_SESSION_AGE_MS = 1;
+            byte[] key = key();
+            PacketPipeline client = pipeline();
+            client.setCryptor(new PacketCryptor(key, false));
+            byte[] wire = client.encode(new TinyPacket(1));
+
+            PacketPipeline server = new PacketPipeline(closes::incrementAndGet, noopDistributor());
+            server.setCryptor(new PacketCryptor(key, true));
+            Thread.sleep(5);
+            assertNull(server.decode(wire));
+            assertEquals(1, closes.get());
+
+            assertThrows(IllegalStateException.class, () -> client.encode(new TinyPacket(2)));
+        } finally {
+            SharedConfig.MAX_SESSION_AGE_MS = maxAge;
+        }
+    }
+
+    @Test
+    void unencryptedPipelineHasNoKeyAge() throws Exception {
+        long maxAge = SharedConfig.MAX_SESSION_AGE_MS;
+        try {
+            SharedConfig.MAX_SESSION_AGE_MS = 1;
+            PacketPipeline pipeline = pipeline();
+            Thread.sleep(5);
+            assertDoesNotThrow(() -> pipeline.encode(new TinyPacket(1)));
+        } finally {
+            SharedConfig.MAX_SESSION_AGE_MS = maxAge;
+        }
+    }
+
     private static PacketPipeline pipeline() {
         return new PacketPipeline(() -> {}, noopDistributor());
     }

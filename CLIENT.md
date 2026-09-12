@@ -184,6 +184,8 @@ The client automatically:
 
 Tune these on `io.lolyay.gma4j.net.shared.SharedConfig` (defaults: 15s interval, 45s timeout, 10s auth window).
 
+Sessions are bounded as well: each direction closes after `MAX_SESSION_PACKETS` (2^28 by default) and the connection closes once the negotiated key is older than `MAX_SESSION_AGE_MS` (24h). Both peers enforce this, so expect a clean `onConnectionClosed` on long lived connections and reconnect for fresh keys.
+
 ## Connection modes
 
 After `onAuthSuccess()` you can ask the server for **low latency** and/or **big size** mode. Both can be requested (and dropped again) at any time during the connection:

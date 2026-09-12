@@ -159,7 +159,8 @@ public class GMA4JNetClient {
             transport.close();
         }
         if(pipeline != null) {
-            pipeline.close();
+            // the pipeline itself may be closing us from inside send, so do not wait for a handler
+            pipeline.requestClose();
         }
         return true;
     }

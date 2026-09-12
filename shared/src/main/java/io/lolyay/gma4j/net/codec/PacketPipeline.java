@@ -28,6 +28,7 @@ public class PacketPipeline {
     private final AtomicBoolean closed = new AtomicBoolean();
     private boolean resourcesClosed;
     private final int maxDecodeErrors = Math.max(1, SharedConfig.MAX_DECODE_ERRORS);
+    private volatile long keyEstablishedAt;
     private int sequence;
     private int remoteSequence;
     private int outOfSequenceCount;
@@ -63,6 +64,7 @@ public class PacketPipeline {
                     return;
                 }
                 this.cryptor = cryptor;
+                this.keyEstablishedAt = cryptor != null ? System.currentTimeMillis() : 0;
             }
         }
     }
@@ -72,18 +74,33 @@ public class PacketPipeline {
     }
 
     public <T extends GMAPacket<T>> byte[] encode(T packet, boolean urgent) {
-        synchronized (encodeLock) {
-            requireOpen();
-            int limit = settings.sendLimit();
-            byte[] encoded = encodePacket(packet, sequence, urgent, limit);
-            if (cryptor != null) {
-                encoded = cryptor.encrypt(encoded);
+        try {
+            synchronized (encodeLock) {
+                requireOpen();
+                if (sequence >= SharedConfig.MAX_SESSION_PACKETS) {
+                    throw new ProtocolCloseSignal("Session packet limit reached on send");
+                }
+                requireFreshKey();
+                int limit = settings.sendLimit();
+                byte[] encoded = encodePacket(packet, sequence, urgent, limit);
+                if (cryptor != null) {
+                    encoded = cryptor.encrypt(encoded);
+                }
+                if (encoded.length > limit) {
+                    throw new PacketCodingException("Packet too large: " + encoded.length + " > " + limit);
+                }
+                sequence++;
+                return encoded;
             }
-            if (encoded.length > limit) {
-                throw new PacketCodingException("Packet too large: " + encoded.length + " > " + limit);
+        } catch (ProtocolCloseSignal signal) {
+            log.warn("Closing connection: {}", signal.getMessage());
+            // callers may hold their own send monitor, so never wait for an active dispatch here
+            try {
+                closeHook.run();
+            } finally {
+                requestClose();
             }
-            sequence++;
-            return encoded;
+            throw new IllegalStateException(signal.getMessage());
         }
     }
 
@@ -136,7 +153,10 @@ public class PacketPipeline {
             synchronized (decodeLock) {
                 return decodeLocked(data);
             }
-        } catch (ProtocolCloseSignal ignored) {
+        } catch (ProtocolCloseSignal signal) {
+            if (signal.getMessage() != null) {
+                log.warn("Closing connection: {}", signal.getMessage());
+            }
             closeForProtocolViolation();
             return null;
         }
@@ -145,6 +165,10 @@ public class PacketPipeline {
     private <T extends GMAPacket<T>> T decodeLocked(byte[] data) {
         requireOpen();
         validateWireFrame(data);
+        if (remoteSequence >= SharedConfig.MAX_SESSION_PACKETS) {
+            throw new ProtocolCloseSignal("Session packet limit reached on receive");
+        }
+        requireFreshKey();
 
         if (cryptor != null) {
             try {
@@ -306,6 +330,14 @@ public class PacketPipeline {
         }
     }
 
+    /** Bounded key age, a reconnect derives fresh keys */
+    private void requireFreshKey() {
+        long establishedAt = keyEstablishedAt;
+        if (establishedAt != 0 && System.currentTimeMillis() - establishedAt > SharedConfig.MAX_SESSION_AGE_MS) {
+            throw new ProtocolCloseSignal("Session key older than " + SharedConfig.MAX_SESSION_AGE_MS + "ms");
+        }
+    }
+
     private void closeForProtocolViolation() {
         try {
             closeHook.run();
@@ -360,5 +392,11 @@ public class PacketPipeline {
     }
 
     private static final class ProtocolCloseSignal extends RuntimeException {
+        ProtocolCloseSignal() {
+        }
+
+        ProtocolCloseSignal(String reason) {
+            super(reason);
+        }
     }
 }

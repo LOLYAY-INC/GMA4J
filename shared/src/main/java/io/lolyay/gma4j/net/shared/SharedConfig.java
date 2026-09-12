@@ -38,6 +38,11 @@ public class SharedConfig {
     public static int MAX_CONNECTIONS = 1024; // concurrent transport connections the server admits
 
 
+    // Session
+    public static int MAX_SESSION_PACKETS = 1 << 28; // per direction, keeps random GCM IVs far below the 2^32 bound and the int sequence from wrapping
+    public static long MAX_SESSION_AGE_MS = 24L * 60 * 60 * 1000; // key age, peers reconnect for fresh keys
+
+
     // Connection modes
     public static boolean ALLOW_LOW_LATENCY_MODE = true;
     public static boolean ALLOW_BIG_SIZE_MODE = true;
