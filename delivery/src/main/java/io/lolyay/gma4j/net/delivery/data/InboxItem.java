@@ -1,4 +1,4 @@
-package io.lolyay.gma4j.net.delivery;
+package io.lolyay.gma4j.net.delivery.data;
 
 import java.util.Objects;
 import java.util.UUID;

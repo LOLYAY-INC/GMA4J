@@ -1,6 +1,8 @@
 package io.lolyay.gma4j.net.delivery;
 
 import io.lolyay.gma4j.net.codec.CodecRegistry;
+import io.lolyay.gma4j.net.delivery.packet.DeliveryAckPacket;
+import io.lolyay.gma4j.net.delivery.packet.DeliveryTransferPacket;
 
 import java.util.Objects;
 

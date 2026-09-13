@@ -1,8 +1,9 @@
-package io.lolyay.gma4j.net.delivery;
+package io.lolyay.gma4j.net.delivery.packet;
 
 import io.lolyay.gma4j.net.codec.packet.CustomCodec;
 import io.lolyay.gma4j.net.codec.packet.GMAPacket;
 import io.lolyay.gma4j.net.codec.packet.PacketType;
+import io.lolyay.gma4j.net.delivery.DeliveryDigest;
 import io.lolyay.gma4j.net.util.ByteReader;
 import io.lolyay.gma4j.net.util.ByteWriter;
 
