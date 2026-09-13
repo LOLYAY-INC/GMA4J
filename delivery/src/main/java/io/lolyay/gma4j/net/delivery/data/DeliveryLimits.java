@@ -1,4 +1,4 @@
-package io.lolyay.gma4j.net.delivery;
+package io.lolyay.gma4j.net.delivery.data;
 
 public record DeliveryLimits(
         int maxPayloadBytes,

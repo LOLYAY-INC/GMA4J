@@ -1,10 +1,10 @@
-package io.lolyay.gma4j.net.delivery;
+package io.lolyay.gma4j.net.delivery.data;
 
 import java.util.Objects;
 import java.util.UUID;
 
-record StoredTransfer(long sequence, UUID transferId, byte[] payload, byte[] digest) {
-    StoredTransfer {
+public record StoredTransfer(long sequence, UUID transferId, byte[] payload, byte[] digest) {
+    public StoredTransfer {
         if (sequence < 0) {
             throw new IllegalArgumentException("sequence cannot be negative");
         }

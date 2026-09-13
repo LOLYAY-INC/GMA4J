@@ -1,4 +1,4 @@
-package io.lolyay.gma4j.net.delivery;
+package io.lolyay.gma4j.net.delivery.exception;
 
 public class DeliveryException extends RuntimeException {
     public DeliveryException(String message) {

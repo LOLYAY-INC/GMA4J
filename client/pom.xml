@@ -5,9 +5,9 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>io.lolyay.gma4j</groupId>
+        <groupId>dev.lolyay.gma4j</groupId>
         <artifactId>gma4j-parent</artifactId>
-        <version>3.17.0</version>
+        <version>3.18.1</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
 
@@ -17,7 +17,7 @@
 
     <dependencies>
         <dependency>
-            <groupId>io.lolyay.gma4j</groupId>
+            <groupId>dev.lolyay.gma4j</groupId>
             <artifactId>gma4j-shared</artifactId>
         </dependency>
         <dependency>

@@ -9,13 +9,13 @@ import io.lolyay.gma4j.net.codec.auth.server.GmaApiHmacAuthServer;
 import io.lolyay.gma4j.net.codec.encryption.client.IClientKnownCertificateKeeper;
 import io.lolyay.gma4j.net.codec.encryption.server.IServerCertificateProvider;
 import io.lolyay.gma4j.net.codec.packet.GMAPacket;
-import io.lolyay.gma4j.net.delivery.DeliveryAckPacket;
-import io.lolyay.gma4j.net.delivery.DeliveryLimits;
 import io.lolyay.gma4j.net.delivery.DeliveryPackets;
-import io.lolyay.gma4j.net.delivery.DeliveryTransferPacket;
 import io.lolyay.gma4j.net.delivery.DurableDeliverySession;
 import io.lolyay.gma4j.net.delivery.H2DeliveryStore;
-import io.lolyay.gma4j.net.delivery.InboxItem;
+import io.lolyay.gma4j.net.delivery.data.DeliveryLimits;
+import io.lolyay.gma4j.net.delivery.data.InboxItem;
+import io.lolyay.gma4j.net.delivery.packet.DeliveryAckPacket;
+import io.lolyay.gma4j.net.delivery.packet.DeliveryTransferPacket;
 import io.lolyay.gma4j.net.server.GMA4JServer;
 import io.lolyay.gma4j.net.server.ServerBindInfo;
 import io.lolyay.gma4j.net.server.ServerEventHandler;
@@ -43,9 +43,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 class DurableDeliveryIntegrationTest {
     private static final String CLIENT_ID = "evidence-client";
