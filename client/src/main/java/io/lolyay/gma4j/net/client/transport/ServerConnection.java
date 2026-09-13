@@ -46,7 +46,7 @@ public class ServerConnection implements ClientConnectionListener { // client ha
             log.warn("Cannot send packet, connection is not established");
             return;
         }
-        if(!data.getPacketType().isSystem() && !netClient.isAuthenticated() && !SharedConfig.ALLOW_PACKETS_UNAUTHED) {
+        if(!data.getPacketType().isSystem() && !pipeline.getAuthGate().get() && !SharedConfig.ALLOW_PACKETS_UNAUTHED) {
             throw new IllegalStateException("Cannot send non-system packet without authentication");
         }
 
@@ -82,7 +82,7 @@ public class ServerConnection implements ClientConnectionListener { // client ha
             return CompletableFuture.failedFuture(new IllegalStateException("Connection is not established"));
         }
 
-        if(!data.getPacketType().isSystem() && !netClient.isAuthenticated() && !SharedConfig.ALLOW_PACKETS_UNAUTHED) {
+        if(!data.getPacketType().isSystem() && !pipeline.getAuthGate().get() && !SharedConfig.ALLOW_PACKETS_UNAUTHED) {
             return CompletableFuture.failedFuture(new IllegalStateException("Cannot send non-system packet without authentication"));
         }
 

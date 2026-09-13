@@ -3,10 +3,7 @@ package io.lolyay.gma4j.it;
 import io.lolyay.gma4j.net.client.net.GMA4JNetClient;
 import io.lolyay.gma4j.net.client.transport.ServerConnection;
 import io.lolyay.gma4j.net.codec.PacketPipeline;
-import io.lolyay.gma4j.net.codec.connection.IConnectionStateCallback;
-import io.lolyay.gma4j.net.codec.connection.MessageSender;
-import io.lolyay.gma4j.net.codec.connection.OutboundBudget;
-import io.lolyay.gma4j.net.codec.connection.WebSocketOutboundBudget;
+import io.lolyay.gma4j.net.codec.connection.*;
 import io.lolyay.gma4j.net.server.transport.netty.NettyServerConnection;
 import io.lolyay.gma4j.net.server.transport.ws.WsServerConnection;
 import io.lolyay.gma4j.net.shared.SharedConfig;
@@ -271,9 +268,8 @@ class OutboundQueueLimitTest {
 
     private static ServerConnection connectedClient(MessageSender sender,
                                                      IConnectionStateCallback stateCallback) throws Exception {
-        PacketPipeline pipeline = new PacketPipeline(() -> {}, new NoopPacketDistributor());
+        PacketPipeline pipeline = new PacketPipeline(() -> {}, new NoopPacketDistributor(), new ConnectionSettings(), () -> true);
         GMA4JNetClient c = new GMA4JNetClient(null,null,null,null,null,null);
-        c.setAuthenticated(true);
         ServerConnection connection = new ServerConnection(c, pipeline, pipeline.getSettings(), stateCallback, "client", "test://server", 0L);
         setField(connection, "messageSender", sender);
         setField(connection, "isConnected", true);

@@ -52,7 +52,6 @@ public class GMA4JNetClient {
     @Setter
     private volatile long lastPing = System.currentTimeMillis();
 
-    @Setter
     private volatile boolean authenticated = false;
     @Getter(AccessLevel.NONE)
     private ScheduledExecutorService scheduler;
