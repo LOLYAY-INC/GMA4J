@@ -12,6 +12,7 @@ import io.lolyay.gma4j.net.codec.encryption.client.ClientEncryptionState;
 import io.lolyay.gma4j.net.codec.packet.GMAPacket;
 import io.lolyay.gma4j.net.codec.systemcodec.c2s.C2SHelloPacket;
 import io.lolyay.gma4j.net.shared.ENV;
+import io.lolyay.gma4j.net.shared.SharedConfig;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -45,6 +46,10 @@ public class ServerConnection implements ClientConnectionListener { // client ha
             log.warn("Cannot send packet, connection is not established");
             return;
         }
+        if(!data.getPacketType().isSystem() && !netClient.isAuthenticated() && !SharedConfig.ALLOW_PACKETS_UNAUTHED) {
+            throw new IllegalStateException("Cannot send non-system packet without authentication");
+        }
+
         boolean expedite = urgent && settings.isLowLatency();
         byte[] packet = pipeline.encode(data, expedite);
         try {

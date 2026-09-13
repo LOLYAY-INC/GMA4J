@@ -34,6 +34,7 @@ public class PacketPipeline {
     private int outOfSequenceCount;
     private int decodeErrorCount;
     private final IPacketDistributor distributor;
+    @Getter
     private final Supplier<Boolean> authGate;
     @Getter
     private final ConnectionSettings settings;
