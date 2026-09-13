@@ -36,6 +36,8 @@ public class PacketPipeline {
     private final IPacketDistributor distributor;
     @Getter
     private final Supplier<Boolean> authGate;
+    /** Server-authoritative id translation, null means our ids are the server's (identity) */
+    private volatile CodecRemap remap;
     @Getter
     private final ConnectionSettings settings;
 
@@ -212,10 +214,12 @@ public class PacketPipeline {
         int codecOrdinal = data[5] & 0xFF;
         int packetId = ((data[6] & 0xFF) << 8) | (data[7] & 0xFF);
 
-        if (!CodecRegistry.getInstance().isValid(packetId)) {
-            if (SharedConfig.IGNORE_CODEC_HASH) {
+        // the wire id is the server's; a remap translates it back to our type
+        PacketType<T> packetType = resolveIncoming(packetId);
+        if (packetType == null) {
+            if (SharedConfig.IGNORE_CODEC_HASH || remap != null) {
                 // peer registered a packet we don't have; drop it instead of tearing the connection down
-                log.warn("Dropping packet with unknown id {} (IGNORE_CODEC_HASH)", packetId);
+                log.warn("Dropping packet with unknown id {}", packetId);
                 return null;
             }
             throw new PacketCodingException("Invalid packet id: " + packetId);
@@ -225,7 +229,6 @@ public class PacketPipeline {
         }
 
         CodecType codecType = CodecType.values()[codecOrdinal];
-        PacketType<T> packetType = CodecRegistry.getInstance().getCodec(packetId);
         // app payloads stay opaque until the peer is authenticated
         if (!packetType.isSystem() && !authGate.get() && !SharedConfig.ALLOW_PACKETS_UNAUTHED) {
             log.warn("Application packet {} before authentication, closing", packetId);
@@ -270,6 +273,14 @@ public class PacketPipeline {
         boolean compressed = false;
         CodecType codecType = packet.getPacketType().codec().getCodecType();
         int packetId = packet.getPacketType().numericId();
+        if (remap != null) {
+            // the server is the id authority, so a packet it never registered cannot be addressed
+            packetId = remap.toRemote(packetId);
+            if (packetId < 0) {
+                throw new PacketCodingException("Packet " + packet.getClass().getSimpleName()
+                        + " is not known to the peer and cannot be sent");
+            }
+        }
 
         try {
             payload = packet.getPacketType().codec().serialize(packet);
@@ -328,6 +339,24 @@ public class PacketPipeline {
         if (data.length > limit) {
             throw new PacketCodingException("Packet too large: " + data.length + " > " + limit);
         }
+    }
+
+    /** Installs the server's id table; both directions translate through it from then on */
+    public void setRemap(CodecRemap remap) {
+        synchronized (encodeLock) {
+            synchronized (decodeLock) {
+                this.remap = remap;
+            }
+        }
+    }
+
+    private <T extends GMAPacket<T>> PacketType<T> resolveIncoming(int packetId) {
+        CodecRegistry registry = CodecRegistry.getInstance();
+        CodecRemap current = remap;
+        if (current != null) {
+            return current.toLocal(packetId, registry);
+        }
+        return registry.isValid(packetId) ? registry.getCodec(packetId) : null;
     }
 
     private void requireOpen() {

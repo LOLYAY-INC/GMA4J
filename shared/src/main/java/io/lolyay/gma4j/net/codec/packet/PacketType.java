@@ -15,16 +15,31 @@ public class PacketType<T extends GMAPacket<T>> {
     private final ImplCodec<T> codec;
     @Getter
     private final int userSetId;
+    /** Matching key across nodes together with userSetId, null keeps hash/name matching */
+    @Getter
+    private final String namespace;
     private final Predicate<T> shouldCompress;
 
     public PacketType(int numericId, ImplCodec<T> codec) {
-        this(numericId, codec, packet -> true);
+        this(numericId, codec, null, packet -> true);
     }
 
     public PacketType(int numericId, ImplCodec<T> codec, Predicate<T> shouldCompress) {
+        this(numericId, codec, null, shouldCompress);
+    }
+
+    public PacketType(int numericId, ImplCodec<T> codec, String namespace) {
+        this(numericId, codec, namespace, packet -> true);
+    }
+
+    public PacketType(int numericId, ImplCodec<T> codec, String namespace, Predicate<T> shouldCompress) {
+        if (namespace != null && namespace.isBlank()) {
+            throw new IllegalArgumentException("namespace must be null or non-blank");
+        }
         this.numericId = numericId;
         this.codec = codec;
         this.userSetId = numericId;
+        this.namespace = namespace;
         this.shouldCompress = shouldCompress;
     }
 

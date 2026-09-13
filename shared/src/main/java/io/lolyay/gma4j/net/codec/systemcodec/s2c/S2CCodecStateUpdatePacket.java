@@ -12,16 +12,19 @@ import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
+/**
+ * The server's authoritative packet id table. Sent after auth to every peer whose codec
+ * set differs (and to non-Java peers, which cannot compute the codec hash at all) so
+ * they can remap their local ids onto the server's.
+ */
 public record S2CCodecStateUpdatePacket(
         int version,
         byte[] global,
         List<CodecUpdateState> states
 ) implements GMAPacket<S2CCodecStateUpdatePacket> {
 
-    // Clients like JS / Python cant make the "codec hash" since it hashes java features, and therefore cant setup the packet ids. we have to inform them of the codec state, and thus we have to have a way of identifiying packets cross-lang.
-    // Clients can match packets using the custom user-set id, and/or the Java Simplename
-    // To prevent "exposure" of this information, we only send the packet after auth
-    private record CodecUpdateState(byte[] packetHash, String packetName, int packetId, int userSetId) {}
+    /** namespace is empty when the packet type has none; peers then match by hash, then by name */
+    public record CodecUpdateState(byte[] packetHash, String packetName, int packetId, int userSetId, String namespace) {}
 
     public static S2CCodecStateUpdatePacket of(CodecConfig codecState) {
         int version = codecState.systemCodecVersion();
@@ -31,7 +34,8 @@ public record S2CCodecStateUpdatePacket(
                 pType.packetHash(),
                 pType.packetType().codec().getClazz().getSimpleName(),
                 pType.packetType().numericId(),
-                pType.packetType().getUserSetId()))
+                pType.packetType().getUserSetId(),
+                pType.packetType().getNamespace() == null ? "" : pType.packetType().getNamespace()))
         );
         return new S2CCodecStateUpdatePacket(version, global, states);
     }
@@ -50,6 +54,7 @@ public record S2CCodecStateUpdatePacket(
                     writer.writePrefixedBytes(codecUpdateState.packetName.getBytes(StandardCharsets.UTF_8));
                     writer.writeVarInt(codecUpdateState.packetId);
                     writer.writeVarInt(codecUpdateState.userSetId);
+                    writer.writePrefixedBytes(codecUpdateState.namespace.getBytes(StandardCharsets.UTF_8));
                 });
                 return writer.getBuf();
             },
@@ -62,7 +67,8 @@ public record S2CCodecStateUpdatePacket(
                                 reader.readBytes(16),
                                 new String(reader.readPrefixedBytes(256), StandardCharsets.UTF_8),
                                 reader.readVarInt(),
-                                reader.readVarInt()
+                                reader.readVarInt(),
+                                new String(reader.readPrefixedBytes(256), StandardCharsets.UTF_8)
                         ))
                 );
             }
