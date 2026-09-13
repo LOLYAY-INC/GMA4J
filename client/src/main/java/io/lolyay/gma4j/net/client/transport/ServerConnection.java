@@ -81,6 +81,11 @@ public class ServerConnection implements ClientConnectionListener { // client ha
         if(messageSender == null || !isConnected) {
             return CompletableFuture.failedFuture(new IllegalStateException("Connection is not established"));
         }
+
+        if(!data.getPacketType().isSystem() && !netClient.isAuthenticated() && !SharedConfig.ALLOW_PACKETS_UNAUTHED) {
+            throw new IllegalStateException("Cannot send non-system packet without authentication");
+        }
+
         boolean expedite = urgent && settings.isLowLatency();
         try {
             return messageSender.sendWithCompletion(pipeline.encode(data, expedite), expedite);
