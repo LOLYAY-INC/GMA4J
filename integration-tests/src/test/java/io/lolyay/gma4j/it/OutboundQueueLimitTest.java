@@ -1,11 +1,9 @@
 package io.lolyay.gma4j.it;
 
+import io.lolyay.gma4j.net.client.net.GMA4JNetClient;
 import io.lolyay.gma4j.net.client.transport.ServerConnection;
 import io.lolyay.gma4j.net.codec.PacketPipeline;
-import io.lolyay.gma4j.net.codec.connection.IConnectionStateCallback;
-import io.lolyay.gma4j.net.codec.connection.MessageSender;
-import io.lolyay.gma4j.net.codec.connection.OutboundBudget;
-import io.lolyay.gma4j.net.codec.connection.WebSocketOutboundBudget;
+import io.lolyay.gma4j.net.codec.connection.*;
 import io.lolyay.gma4j.net.server.transport.netty.NettyServerConnection;
 import io.lolyay.gma4j.net.server.transport.ws.WsServerConnection;
 import io.lolyay.gma4j.net.shared.SharedConfig;
@@ -36,20 +34,10 @@ import java.net.URI;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.function.Function;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 class OutboundQueueLimitTest {
 
@@ -280,8 +268,9 @@ class OutboundQueueLimitTest {
 
     private static ServerConnection connectedClient(MessageSender sender,
                                                      IConnectionStateCallback stateCallback) throws Exception {
-        PacketPipeline pipeline = new PacketPipeline(() -> {}, new NoopPacketDistributor());
-        ServerConnection connection = new ServerConnection(null, pipeline, pipeline.getSettings(), stateCallback, "client", "test://server", 0L);
+        PacketPipeline pipeline = new PacketPipeline(() -> {}, new NoopPacketDistributor(), new ConnectionSettings(), () -> true);
+        GMA4JNetClient c = new GMA4JNetClient(null,null,null,null,null,null);
+        ServerConnection connection = new ServerConnection(c, pipeline, pipeline.getSettings(), stateCallback, "client", "test://server", 0L);
         setField(connection, "messageSender", sender);
         setField(connection, "isConnected", true);
         return connection;

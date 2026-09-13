@@ -3,9 +3,9 @@ package io.lolyay.gma4j.net.server.net;
 import io.lolyay.gma4j.net.codec.ClientType;
 import io.lolyay.gma4j.net.codec.PacketPipeline;
 import io.lolyay.gma4j.net.codec.auth.server.GmaAuthServer;
-import io.lolyay.gma4j.net.codec.connection.MessageSender;
 import io.lolyay.gma4j.net.codec.connection.ConnectionSettings;
 import io.lolyay.gma4j.net.codec.connection.InboundBudget;
+import io.lolyay.gma4j.net.codec.connection.MessageSender;
 import io.lolyay.gma4j.net.codec.connection.server.ServerConnectionListener;
 import io.lolyay.gma4j.net.codec.encryption.server.ServerEncryptionState;
 import io.lolyay.gma4j.net.codec.packet.GMAPacket;
@@ -95,6 +95,10 @@ public class ClientOnServer implements ServerConnectionListener, IPacketHandler 
             log.warn("Cannot send packet to {}, connection is not established", describe());
             return;
         }
+        if(!packet.getPacketType().isSystem() && !isAuthenticated() && !SharedConfig.ALLOW_PACKETS_UNAUTHED) {
+            throw new IllegalStateException("Cannot send non-system packet without authentication");
+        }
+
         boolean expedite = urgent && settings.isLowLatency();
         byte[] encoded = pipeline.encode(packet, expedite);
         try {
