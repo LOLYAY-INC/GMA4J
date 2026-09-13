@@ -182,9 +182,10 @@ public class ServerDefaultSystemPacketCallback implements SystemPacketCallback {
             return;
         }
 
-        // the id table must land before the auth status so the peer is remapped by the time onAuthSuccess fires
+        // the id table must land before the auth status so the peer is remapped by the time onAuthSuccess fires;
+        // it comes from the registry verifyCompatibility hashed against, not the singleton
         if(client.needsCodecStateUpdate()) {
-            client.send(S2CCodecStateUpdatePacket.of(CodecRegistry.getInstance().getConfig()));
+            client.send(S2CCodecStateUpdatePacket.of(client.getNetServer().getCodecRegistry().getConfig()));
         }
 
         if(!client.isConnected()) {

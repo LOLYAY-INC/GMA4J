@@ -33,6 +33,7 @@ public class PacketPipeline {
     private int remoteSequence;
     private int outOfSequenceCount;
     private int decodeErrorCount;
+    private int unknownIdCount;
     private final IPacketDistributor distributor;
     @Getter
     private final Supplier<Boolean> authGate;
@@ -217,10 +218,17 @@ public class PacketPipeline {
         // the wire id is the server's; a remap translates it back to our type
         PacketType<T> packetType = resolveIncoming(packetId);
         if (packetType == null) {
-            if (SharedConfig.IGNORE_CODEC_HASH || remap != null) {
-                // peer registered a packet we don't have; drop it instead of tearing the connection down
-                log.warn("Dropping packet with unknown id {}", packetId);
+            // leniency is for authenticated peers with a divergent packet set; an unauthenticated peer
+            // sending unknown ids is a probe and is bounded like any other malformed packet
+            boolean lenient = (SharedConfig.IGNORE_CODEC_HASH || remap != null) && authGate.get();
+            if (lenient && ++unknownIdCount <= SharedConfig.MAX_UNKNOWN_PACKET_IDS) {
+                log.warn("Dropping packet with unknown id {} ({}/{})", packetId, unknownIdCount,
+                        SharedConfig.MAX_UNKNOWN_PACKET_IDS);
                 return null;
+            }
+            if (lenient) {
+                log.warn("Closing connection, more than {} unknown packet ids", SharedConfig.MAX_UNKNOWN_PACKET_IDS);
+                throw new ProtocolCloseSignal();
             }
             throw new PacketCodingException("Invalid packet id: " + packetId);
         }

@@ -38,8 +38,8 @@ public final class CodecRemap {
         return build(update.states(), registry.getConfig().codecState(), registry.systemIdBound());
     }
 
-    /** Package-visible builder from raw lists so tests can model two registries in one JVM */
-    static CodecRemap build(List<S2CCodecStateUpdatePacket.CodecUpdateState> remote,
+    /** Builds from raw tables; lets tests model two registries in one JVM, prefer {@link #from} otherwise */
+    public static CodecRemap build(List<S2CCodecStateUpdatePacket.CodecUpdateState> remote,
                             List<CodecConfig.CodecState> local,
                             int systemIdBound) {
         Map<Integer, Integer> localToRemote = new HashMap<>();
@@ -66,30 +66,54 @@ public final class CodecRemap {
         return new CodecRemap(localToRemote, remoteToLocal, systemIdBound);
     }
 
+    /**
+     * A namespaced entry matches only an exact (namespace, userSetId); it never falls through to
+     * hash/name, since fingerprints ignore the namespace and would conflate packets documented as
+     * distinct. Unnamespaced entries match only unnamespaced local types. More than one candidate
+     * for a strategy is an ambiguous registry and fails installation.
+     */
     private static CodecConfig.CodecState match(S2CCodecStateUpdatePacket.CodecUpdateState entry,
                                                 List<CodecConfig.CodecState> local) {
-        boolean namespaced = !entry.namespace().isEmpty();
-        if (namespaced) {
-            for (CodecConfig.CodecState candidate : local) {
+        if (!entry.namespace().isEmpty()) {
+            return single(entry, local, candidate -> {
                 PacketType<?> type = candidate.packetType();
-                if (entry.namespace().equals(type.getNamespace()) && entry.userSetId() == type.getUserSetId()) {
-                    return candidate;
-                }
-            }
+                return entry.namespace().equals(type.getNamespace()) && entry.userSetId() == type.getUserSetId();
+            }, "namespace " + entry.namespace() + " id " + entry.userSetId());
         }
+        CodecConfig.CodecState byHash = single(entry, local,
+                candidate -> candidate.packetType().getNamespace() == null
+                        && Arrays.equals(candidate.packetHash(), entry.packetHash()),
+                "fingerprint of " + entry.packetName());
+        if (byHash != null) {
+            return byHash;
+        }
+        CodecConfig.CodecState byName = single(entry, local,
+                candidate -> candidate.packetType().getNamespace() == null
+                        && candidate.packetType().codec().getClazz().getSimpleName().equals(entry.packetName()),
+                "name " + entry.packetName());
+        if (byName != null) {
+            log.warn("Packet {} matched the peer by name only, its shape differs and may fail to decode",
+                    entry.packetName());
+        }
+        return byName;
+    }
+
+    private static CodecConfig.CodecState single(S2CCodecStateUpdatePacket.CodecUpdateState entry,
+                                                 List<CodecConfig.CodecState> local,
+                                                 java.util.function.Predicate<CodecConfig.CodecState> key,
+                                                 String describe) {
+        CodecConfig.CodecState found = null;
         for (CodecConfig.CodecState candidate : local) {
-            if (Arrays.equals(candidate.packetHash(), entry.packetHash())) {
-                return candidate;
+            if (!key.test(candidate)) {
+                continue;
             }
-        }
-        for (CodecConfig.CodecState candidate : local) {
-            if (candidate.packetType().codec().getClazz().getSimpleName().equals(entry.packetName())) {
-                log.warn("Packet {} matched the peer by name only, its shape differs and may fail to decode",
-                        entry.packetName());
-                return candidate;
+            if (found != null) {
+                throw new IllegalStateException("More than one local packet matches peer entry "
+                        + entry.packetName() + " by " + describe + ", registry is ambiguous");
             }
+            found = candidate;
         }
-        return null;
+        return found;
     }
 
     /** The server's id for a local packet, or -1 if the server does not know it */

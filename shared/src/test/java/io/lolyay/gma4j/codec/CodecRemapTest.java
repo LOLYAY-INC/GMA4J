@@ -15,13 +15,14 @@ import io.lolyay.gma4j.net.codec.packetdistributer.IPacketDistributor;
 import io.lolyay.gma4j.net.codec.systemcodec.s2c.S2CCodecStateUpdatePacket;
 import io.lolyay.gma4j.net.codec.systemcodec.s2c.S2CCodecStateUpdatePacket.CodecUpdateState;
 import io.lolyay.gma4j.net.shared.SharedConfig;
-import io.lolyay.gma4j.net.util.ByteReader;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -138,6 +139,91 @@ class CodecRemapTest {
         assertEquals("myplugin", back.states().get(0).namespace());
         assertEquals("", back.states().get(1).namespace());
         assertEquals(9, back.states().get(0).packetId());
+    }
+
+    @Test
+    void namespacedEntryNeverFallsThroughToHashOrName() {
+        // server has ("otherplugin", 1); we only have TinyPacket (unnamespaced) with the same fingerprint
+        CodecConfig config = CodecRegistry.getInstance().getConfig();
+        CodecConfig.CodecState tiny = config.codecState().stream()
+                .filter(s -> s.packetType() == TinyPacket.TYPE).findFirst().orElseThrow();
+        CodecUpdateState foreign = new CodecUpdateState(tiny.packetHash(), "TinyPacket",
+                tiny.packetType().numericId(), tiny.packetType().getUserSetId(), "otherplugin");
+        CodecRemap remap = CodecRemap.from(
+                new S2CCodecStateUpdatePacket(0, config.globalCodecState(), List.of(foreign)),
+                CodecRegistry.getInstance());
+        // same hash, same name, but namespaced: must NOT map onto our unnamespaced TinyPacket
+        assertNull(remap.toLocal(tiny.packetType().numericId(), CodecRegistry.getInstance()));
+        assertEquals(-1, remap.toRemote(TinyPacket.TYPE.numericId()));
+    }
+
+    @Test
+    void ambiguousLocalMatchFailsInstallation() {
+        // two local entries that both claim the server's name-only key
+        CodecConfig config = CodecRegistry.getInstance().getConfig();
+        CodecConfig.CodecState tiny = config.codecState().stream()
+                .filter(s -> s.packetType() == TinyPacket.TYPE).findFirst().orElseThrow();
+        List<CodecConfig.CodecState> duplicated = List.of(tiny, tiny);
+        CodecUpdateState entry = new CodecUpdateState(new byte[16], "TinyPacket", 50, 0, "");
+        assertThrows(IllegalStateException.class,
+                () -> CodecRemap.build(List.of(entry), duplicated, CodecRegistry.getInstance().systemIdBound()));
+    }
+
+    @Test
+    void namespaceOnlyDifferenceChangesGlobalHash() {
+        PacketType<NsA> plain = new PacketType<>(1, new AutoCodec<>(NsA.class));
+        PacketType<NsA> namespaced = new PacketType<>(1, new AutoCodec<>(NsA.class), "myplugin");
+        byte[] a = CodecConfig.generate(List.of(plain)).globalCodecState();
+        byte[] b = CodecConfig.generate(List.of(namespaced)).globalCodecState();
+        assertFalse(java.util.Arrays.equals(a, b), "namespace must be part of the codec identity hash");
+        // and the same identity produces the same hash
+        assertArrayEquals(b, CodecConfig.generate(List.of(new PacketType<>(1, new AutoCodec<>(NsA.class), "myplugin"))).globalCodecState());
+    }
+
+    @Test
+    void unknownIdsAreCappedForLenientPeers() {
+        int previous = SharedConfig.MAX_UNKNOWN_PACKET_IDS;
+        java.util.concurrent.atomic.AtomicInteger closes = new java.util.concurrent.atomic.AtomicInteger();
+        try {
+            SharedConfig.MAX_UNKNOWN_PACKET_IDS = 2;
+            PacketPipeline peer = new PacketPipeline(closes::incrementAndGet, new IPacketDistributor() {
+                @Override
+                public <T extends GMAPacket<T>> void distribute(T packet) {
+                }
+            });
+            peer.setRemap(remapWhereServerSwapsTinyAndBinary());
+            assertNull(peer.decode(unknownIdFrame(0)));
+            assertNull(peer.decode(unknownIdFrame(1)));
+            assertEquals(0, closes.get());
+            assertNull(peer.decode(unknownIdFrame(2)));
+            assertEquals(1, closes.get(), "third unknown id must close the connection");
+        } finally {
+            SharedConfig.MAX_UNKNOWN_PACKET_IDS = previous;
+        }
+    }
+
+    @Test
+    void unauthenticatedPeerGetsNoLeniency() {
+        boolean previous = SharedConfig.IGNORE_CODEC_HASH;
+        try {
+            SharedConfig.IGNORE_CODEC_HASH = true;
+            PacketPipeline peer = new PacketPipeline(() -> {}, new IPacketDistributor() {
+                @Override
+                public <T extends GMAPacket<T>> void distribute(T packet) {
+                }
+            }, new io.lolyay.gma4j.net.codec.connection.ConnectionSettings(), () -> false);
+            assertThrows(PacketCodingException.class, () -> peer.decode(unknownIdFrame(0)));
+        } finally {
+            SharedConfig.IGNORE_CODEC_HASH = previous;
+        }
+    }
+
+    private static byte[] unknownIdFrame(int sequence) {
+        byte[] data = new byte[8];
+        data[3] = (byte) sequence;
+        data[6] = 0x7F;
+        data[7] = (byte) 0xFF;
+        return data;
     }
 
     private static PacketPipeline pipeline() {

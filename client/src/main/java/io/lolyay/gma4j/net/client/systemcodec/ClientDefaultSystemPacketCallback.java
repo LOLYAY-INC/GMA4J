@@ -1,7 +1,6 @@
 package io.lolyay.gma4j.net.client.systemcodec;
 
 import io.lolyay.gma4j.net.client.net.GMA4JNetClient;
-import io.lolyay.gma4j.net.codec.CodecRegistry;
 import io.lolyay.gma4j.net.codec.CodecRemap;
 import io.lolyay.gma4j.net.codec.auth.client.GmaAuthClient;
 import io.lolyay.gma4j.net.codec.connection.ConnectionState;
@@ -31,7 +30,7 @@ public class ClientDefaultSystemPacketCallback implements SystemPacketCallback {
 
         if(packet instanceof S2CCodecStateUpdatePacket update) {
             // the server's id table is authoritative; from here on we encode with its ids
-            netClient.getPipeline().setRemap(CodecRemap.from(update, CodecRegistry.getInstance()));
+            netClient.getPipeline().setRemap(CodecRemap.from(update, netClient.getCodecRegistry()));
             return;
         }
 

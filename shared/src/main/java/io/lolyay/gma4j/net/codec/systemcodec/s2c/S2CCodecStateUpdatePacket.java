@@ -24,7 +24,11 @@ public record S2CCodecStateUpdatePacket(
 ) implements GMAPacket<S2CCodecStateUpdatePacket> {
 
     /** namespace is empty when the packet type has none; peers then match by hash, then by name */
-    public record CodecUpdateState(byte[] packetHash, String packetName, int packetId, int userSetId, String namespace) {}
+    public record CodecUpdateState(byte[] packetHash, String packetName, int packetId, int userSetId, String namespace) {
+        public CodecUpdateState {
+            namespace = namespace == null ? "" : namespace;
+        }
+    }
 
     public static S2CCodecStateUpdatePacket of(CodecConfig codecState) {
         int version = codecState.systemCodecVersion();
