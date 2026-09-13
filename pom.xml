@@ -4,7 +4,7 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>io.lolyay.gma4j</groupId>
+    <groupId>dev.lolyay.gma4j</groupId>
     <artifactId>gma4j-parent</artifactId>
     <version>3.17.0</version>
     <packaging>pom</packaging>
@@ -49,17 +49,17 @@
         <dependencies>
             <!-- Internal modules -->
             <dependency>
-                <groupId>io.lolyay.gma4j</groupId>
+                <groupId>dev.lolyay.gma4j</groupId>
                 <artifactId>gma4j-shared</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>io.lolyay.gma4j</groupId>
+                <groupId>dev.lolyay.gma4j</groupId>
                 <artifactId>gma4j-ws</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>io.lolyay.gma4j</groupId>
+                <groupId>dev.lolyay.gma4j</groupId>
                 <artifactId>gma4j-netty</artifactId>
                 <version>${project.version}</version>
             </dependency>
