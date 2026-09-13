@@ -69,6 +69,11 @@ public class WsClientTransport implements IClientTransport {
                 listener.onConnectionError(ex);
             }
         };
+        // custom trust applies to wss only; an SSL factory on a ws:// URI would force TLS on a plaintext peer
+        javax.net.ssl.SSLContext sslContext = listener.sslContext();
+        if (sslContext != null && "wss".equalsIgnoreCase(uri.getScheme())) {
+            client.setSocketFactory(sslContext.getSocketFactory());
+        }
         // the engine works on its own copy of the draft
         WebSocket connection = client.getConnection();
         ((FrameGuardedDraft) connection.getDraft()).bind(connection, listener::maxIncomingFrameSize);

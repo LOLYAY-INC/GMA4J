@@ -11,6 +11,8 @@ import io.lolyay.gma4j.net.transport.ServerTransportData;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
+import javax.net.ssl.SSLContext;
+
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Map;
@@ -34,10 +36,27 @@ public class GMA4JServer {
     }
 
     public void start(ServerBindInfo bindInfo) {
+        start(bindInfo, null);
+    }
+
+    public void start(ServerBindInfo bindInfo, WsServerSecurity security) {
+        SSLContext sslContext = security == null ? null : security.sslContext();
+        boolean wss = "wss".equalsIgnoreCase(bindInfo.scheme());
+        // keep the scheme and the TLS material consistent so a listener is never accidentally plaintext
+        if (wss && sslContext == null) {
+            throw new IllegalArgumentException("scheme 'wss' requires a WsServerSecurity with an SSLContext");
+        }
+        if (sslContext != null && !wss) {
+            throw new IllegalArgumentException("an SSLContext was given but the scheme is '" + bindInfo.scheme() + "', use 'wss'");
+        }
         Map<GmaAuthType, GmaAuthServer> authServers = Arrays.stream(bindInfo.authServers())
                 .collect(Collectors.toMap(GmaAuthServer::authType, Function.identity()));
         this.netServer = new GMA4JNetServer(eventHandler, certificateProvider, authServers, codecRegistry);
-        this.netServer.start(new ServerTransportData(bindInfo.host(), bindInfo.port()), bindInfo.scheme());
+        ServerTransportData data = security == null
+                ? new ServerTransportData(bindInfo.host(), bindInfo.port())
+                : new ServerTransportData(bindInfo.host(), bindInfo.port(), false, null,
+                        security.sslContext(), security.allowedOrigins());
+        this.netServer.start(data, bindInfo.scheme());
     }
 
     public void stop() {

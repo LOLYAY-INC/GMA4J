@@ -10,6 +10,8 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 
+import javax.net.ssl.SSLContext;
+
 import java.util.Arrays;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
@@ -25,6 +27,10 @@ public class GMA4JClient {
     @Setter
     @Getter
     private IClientKnownCertificateKeeper knownCertificateKeeper = new NoOpCertificateKeeper();
+
+    /** Custom TLS trust for wss connections, null uses system CAs */
+    @Getter
+    private SSLContext sslContext;
 
     /**
      * -- GETTER --
