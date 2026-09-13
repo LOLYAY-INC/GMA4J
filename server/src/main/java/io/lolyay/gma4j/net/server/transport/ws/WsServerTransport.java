@@ -13,6 +13,7 @@ import org.java_websocket.framing.CloseFrame;
 import org.java_websocket.handshake.ClientHandshake;
 import org.java_websocket.handshake.ServerHandshakeBuilder;
 import org.java_websocket.protocols.Protocol;
+import org.java_websocket.server.DefaultSSLWebSocketServerFactory;
 import org.java_websocket.server.WebSocketServer;
 
 import java.net.InetSocketAddress;
@@ -102,6 +103,7 @@ public class WsServerTransport implements IServerTransport {
 
             @Override
             public ServerHandshakeBuilder onWebsocketHandshakeReceivedAsServer(WebSocket conn, Draft draft, ClientHandshake request) throws InvalidDataException {
+                rejectDisallowedOrigin(data.allowedOrigins(), request);
                 ServerHandshakeBuilder builder = super.onWebsocketHandshakeReceivedAsServer(conn, draft, request);
                 if (draft instanceof FrameGuardedDraft guarded) {
                     guarded.bind(conn, () -> incomingLimit(conn));
@@ -112,6 +114,23 @@ public class WsServerTransport implements IServerTransport {
                 return builder;
             }
         };
+
+        if (data.sslContext() != null) {
+            server.setWebSocketFactory(new DefaultSSLWebSocketServerFactory(data.sslContext()));
+        }
+    }
+
+    /** Browsers send Origin; native clients do not, so an absent Origin is allowed */
+    private static void rejectDisallowedOrigin(java.util.Set<String> allowedOrigins, ClientHandshake request)
+            throws InvalidDataException {
+        if (allowedOrigins.isEmpty()) {
+            return;
+        }
+        String origin = request.getFieldValue(HEADER_ORIGIN);
+        if (origin != null && !origin.isEmpty()
+                && !allowedOrigins.contains(origin.toLowerCase(Locale.ROOT))) {
+            throw new InvalidDataException(CloseFrame.POLICY_VALIDATION, "Origin not allowed");
+        }
     }
 
     /** Base limit until the listener is attached in onOpen */

@@ -69,6 +69,11 @@ public class WsClientTransport implements IClientTransport {
                 listener.onConnectionError(ex);
             }
         };
+        // custom trust for self-signed / pinned wss; null keeps Java-WebSocket's system-CA default
+        javax.net.ssl.SSLContext sslContext = listener.sslContext();
+        if (sslContext != null) {
+            client.setSocketFactory(sslContext.getSocketFactory());
+        }
         // the engine works on its own copy of the draft
         WebSocket connection = client.getConnection();
         ((FrameGuardedDraft) connection.getDraft()).bind(connection, listener::maxIncomingFrameSize);

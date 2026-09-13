@@ -103,6 +103,11 @@ public class ServerConnection implements ClientConnectionListener { // client ha
     }
 
     @Override
+    public javax.net.ssl.SSLContext sslContext() {
+        return netClient != null ? netClient.getParent().getSslContext() : null;
+    }
+
+    @Override
     public void onConnectionEstablished(MessageSender sender) {
         this.messageSender = sender;
         isConnected = true;

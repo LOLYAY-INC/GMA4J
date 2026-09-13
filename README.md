@@ -225,6 +225,38 @@ server.stop();
 
 Inside the handler each `ClientOnServer` exposes `getAssignedId()` (server UUID), `getClaimedClientId()`, `isAuthenticated()`, `send(packet)`, `setModes(lowLatency, bigSize, maxPacketSize)` and `disconnect("reason")`.
 
+### TLS (wss) and Origin checking
+
+The WebSocket transport can terminate TLS itself and gate browser handshakes by `Origin`, so a
+reverse proxy is optional. Pass a `WsServerSecurity` to `start`: a non-null `SSLContext` enables
+`wss`, and a non-empty origin allowlist rejects browser handshakes whose `Origin` is not listed.
+
+```java
+SSLContext tls = SSLContext.getInstance("TLS");
+tls.init(keyManagers, null, null);   // your server cert/key
+
+server.start(
+        new ServerBindInfo("0.0.0.0", 8443, "wss", new GmaApiHmacAuthServer("super-secret-key")),
+        new WsServerSecurity(tls, Set.of("https://app.example.com")));
+```
+
+`SSLContext` and the origin set are independent: pass `new WsServerSecurity(tls, null)` for TLS with
+no origin gate, or `new WsServerSecurity(null, Set.of(...))` to gate origins on plaintext `ws`.
+Origins match case-insensitively; a request with **no** `Origin` header is allowed, because native
+(non-browser) GMA4J clients never send one, so the check only constrains browsers.
+
+On the client, `wss://` uses the system CA trust by default. For a self-signed or internal-CA server,
+set a custom `SSLContext` before connecting:
+
+```java
+client.setSslContext(myTrustingSslContext);   // omit for public-CA servers
+client.connect(new ClientConnectionInfo("client-1", URI.create("wss://app.example.com:8443"), auth));
+```
+
+This TLS layer is separate from GMA4J's own ECDH + AES-GCM encryption and the certificate pinning in
+[Certificate pinning](#certificate-pinning-recommended); wss adds standard transport TLS and browser
+compatibility on top.
+
 ## Rolling your own auth
 
 Implement a matching pair on `GmaAuthType.CUSTOM`: a `GmaAuthServer` on the server and a `GmaAuthClient` on the client. The server issues a challenge, the client answers it, the server verifies. **Always fold the `stateHash` (the handshake transcript) into the answer**, so a captured response cannot be replayed on another session.
@@ -326,6 +358,6 @@ UUID transferId = delivery.enqueue(evidenceBytes);   // works offline, commits b
 
 - Packet direction and role authorization are enforced by your handlers.
 - Transport reconnects and committing application side effects stay with the application.
-- The server WebSocket transport does not configure TLS or validate `Origin`. Terminate TLS and enforce allowed origins in a proxy, or provide a custom transport.
+- The server WebSocket transport can terminate TLS and enforce an `Origin` allowlist itself (see [TLS (wss) and Origin checking](#tls-wss-and-origin-checking)); a reverse proxy for those is optional.
 
 Security issues: see [SECURITY.md](SECURITY.md).

@@ -34,10 +34,18 @@ public class GMA4JServer {
     }
 
     public void start(ServerBindInfo bindInfo) {
+        start(bindInfo, null);
+    }
+
+    public void start(ServerBindInfo bindInfo, WsServerSecurity security) {
         Map<GmaAuthType, GmaAuthServer> authServers = Arrays.stream(bindInfo.authServers())
                 .collect(Collectors.toMap(GmaAuthServer::authType, Function.identity()));
         this.netServer = new GMA4JNetServer(eventHandler, certificateProvider, authServers, codecRegistry);
-        this.netServer.start(new ServerTransportData(bindInfo.host(), bindInfo.port()), bindInfo.scheme());
+        ServerTransportData data = security == null
+                ? new ServerTransportData(bindInfo.host(), bindInfo.port())
+                : new ServerTransportData(bindInfo.host(), bindInfo.port(), false, null,
+                        security.sslContext(), security.allowedOrigins());
+        this.netServer.start(data, bindInfo.scheme());
     }
 
     public void stop() {
