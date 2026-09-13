@@ -1,6 +1,6 @@
 # GMA4J
 
-Secure, transport-agnostic messaging for Java (JS and Python clients planned).
+Secure, transport-agnostic messaging for Java (Clients available in different languages).
 
 GMA4J gives you auth, end-to-end encryption and pluggable transports (WebSocket or raw TCP via Netty) in one **modular** library.
 > The main goal of this project is to be **modular**: if a feature is missing you can usually implement it yourself, or open a GitHub issue / PR.
@@ -8,24 +8,24 @@ GMA4J gives you auth, end-to-end encryption and pluggable transports (WebSocket 
 ## What you get
 
 - **End-to-end encryption** negotiated on connect: ephemeral ECDH (P-256) key agreement, AES-256-GCM.
-- **Trust-on-first-use server pinning** (SSH `known_hosts` style), so a swapped server key is detected and rejected.
+- **Trust-on-first-use server pinning** (SSH `known_hosts` style), so a swapped server key is detected and rejected. (Customizable)
 - **Pluggable authentication** after encryption is up: none, API key, HMAC-SHA256, ECDSA, JWT, or your own.
 - **Runtime connection modes**: low latency (no compression, TCP_NODELAY, urgent sends) and big size (packets beyond the 1 MiB base limit, budgeted server-side), negotiated per connection.
-- **Hard limits everywhere**: frame sizes, outbound queues, inbound processing memory, session age and packet count, handshake deadlines, admission.
+- **Clients available in different Languages**: Java, [JS (WebSockets)](https://github.com/LOLYAY-INC/gma4j-js), Python (Planned), Rust (Work in Progress)
 - **Optional durable delivery**: persisted evidence, receipt ACKs, replay and deduplication.
 
 ## Modules and install
 
-| Artifact | Purpose | Depends on |
-|---|---|---|
-| `gma4j-shared` | Codec, encryption, auth primitives, the whole protocol | (base) |
-| `gma4j-client` | Client stack | shared |
-| `gma4j-server` | Server stack plus both server-side transports | shared |
-| `gma4j-ws` | Client WebSocket transport (`ws`, `wss`) | shared |
-| `gma4j-netty` | Client TCP transport (`gma4j`, `gma`) | shared |
+| Artifact         | Purpose                                                   | Depends on |
+|------------------|-----------------------------------------------------------|------------|
+| `gma4j-shared`   | Codec, encryption, auth primitives, the whole protocol    | (base)     |
+| `gma4j-client`   | Client stack                                              | shared     |
+| `gma4j-server`   | Server stack plus both server-side transports             | shared     |
+| `gma4j-ws`       | Client WebSocket transport (`ws`, `wss`)                  | shared     |
+| `gma4j-netty`    | Client TCP transport (`gma4j`, `gma`)                     | shared     |
 | `gma4j-delivery` | Optional durable evidence receipts, replay, deduplication | shared, H2 |
 
-A client app depends on `gma4j-client` plus `gma4j-ws` and/or `gma4j-netty`; a server app on `gma4j-server`. Requires **Java 21+**.
+A client app depends on `gma4j-client` plus `gma4j-ws` and/or `gma4j-netty`; a server app on `gma4j-server` (and optionally on `gma4j-delivery`). Requires **Java 21+**.
 
 ```xml
 <repositories>
@@ -99,13 +99,13 @@ new ClientConnectionInfo(URI.create("gma4j://127.0.0.1:9000"));                 
 new ClientConnectionInfo(URI.create("gma4j://127.0.0.1:9000"), "my-client-id"); // no auth
 ```
 
-| Client factory | Server backend | Auth type |
-|---|---|---|
-| `ClientAuth.none()` | `GmaNoAuthServer` | none (**insecure**, testing) |
-| `ClientAuth.apiKey(String)` | `GmaApiKeyAuthServer(apiKey)` | API key (**deprecated**, replayable, use HMAC) |
-| `ClientAuth.hmac(String / byte[])` | `GmaApiHmacAuthServer`, `GmaMultiClientHmacAuthServer` (key per client id) | HMAC-SHA256 |
-| `ClientAuth.ecc(String / ECPrivateKey)` | `GmaApiECCAuthServer`, `GmaMultiClientECCAuthServer` (key per client id) | ECDSA |
-| `ClientAuth.jwt(String)` | `GmaJWTAuthServer` (optionally requires the client id in `aud`) | JWT |
+| Client factory                          | Server backend                                                             | Auth type                                      |
+|-----------------------------------------|----------------------------------------------------------------------------|------------------------------------------------|
+| `ClientAuth.none()`                     | `GmaNoAuthServer`                                                          | none (**insecure**, testing)                   |
+| `ClientAuth.apiKey(String)`             | `GmaApiKeyAuthServer(apiKey)`                                              | API key (**deprecated**, replayable, use HMAC) |
+| `ClientAuth.hmac(String / byte[])`      | `GmaApiHmacAuthServer`, `GmaMultiClientHmacAuthServer` (key per client id) | HMAC-SHA256                                    |
+| `ClientAuth.ecc(String / ECPrivateKey)` | `GmaApiECCAuthServer`, `GmaMultiClientECCAuthServer` (key per client id)   | ECDSA                                          |
+| `ClientAuth.jwt(String)`                | `GmaJWTAuthServer` (optionally requires the client id in `aud`)            | JWT                                            |
 
 ### Certificate pinning (recommended)
 
@@ -289,25 +289,28 @@ DurableDeliverySession delivery = new DurableDeliverySession("trusted-peer", sto
 UUID transferId = delivery.enqueue(evidenceBytes);   // works offline, commits before returning
 ```
 
-| Callback or operation | Integration |
-|---|---|
-| Client `onAuthSuccess` | `delivery.attachAuthenticated(connectionToken, client::send)` |
-| Server `onClientAuthenticated` | `delivery.attachAuthenticated(client, client::send)` on that peer's session |
-| Incoming `DeliveryTransferPacket` | `delivery.handleTransfer(connectionToken, transfer)` |
-| Incoming `DeliveryAckPacket` | `delivery.handleAck(connectionToken, ack)` |
-| Disconnect or connection error | `delivery.detach(connectionToken)` |
-| Application retry timer | `delivery.retry()` periodically, e.g. once per second; there is no internal retry thread |
-| Process pending inbox | `delivery.pollInbox(limit)`, commit application work, then `delivery.markProcessed(item.transferId())` |
-| Application shutdown | stop retry tasks, detach connections, then `store.close()` |
+| Callback or operation             | Integration                                                                                            |
+|-----------------------------------|--------------------------------------------------------------------------------------------------------|
+| Client `onAuthSuccess`            | `delivery.attachAuthenticated(connectionToken, client::send)`                                          |
+| Server `onClientAuthenticated`    | `delivery.attachAuthenticated(client, client::send)` on that peer's session                            |
+| Incoming `DeliveryTransferPacket` | `delivery.handleTransfer(connectionToken, transfer)`                                                   |
+| Incoming `DeliveryAckPacket`      | `delivery.handleAck(connectionToken, ack)`                                                             |
+| Disconnect or connection error    | `delivery.detach(connectionToken)`                                                                     |
+| Application retry timer           | `delivery.retry()` periodically, e.g. once per second; there is no internal retry thread               |
+| Process pending inbox             | `delivery.pollInbox(limit)`, commit application work, then `delivery.markProcessed(item.transferId())` |
+| Application shutdown              | stop retry tasks, detach connections, then `store.close()`                                             |
 
-Use a fresh connection token per authenticated connection so a late disconnect callback cannot detach its replacement; on the server the `ClientOnServer` instance is the token. Keep the store and sessions for the application's lifetime; the store can hold several peers. Treat delivery or storage exceptions as failures: detach and close the connection, then investigate. See the [TCP/WS integration test](integration-tests/src/test/java/io/lolyay/gma4j/it/DurableDeliveryIntegrationTest.java) for a complete pinned, authenticated example.
 
-Identical duplicates are ACKed without a second inbox entry. Processing an item removes its payload but keeps its digest tombstone, which does not expire. Full stores reject new evidence without ACKing it, so monitor capacity; quotas bound logical data, not the H2 file size. Evidence is plaintext on disk, so protect the database and backups; restoring an old receiver backup can discard receipt history, and log flushing cannot recover a lost disk. Application side effects still need their own idempotency.
+> **Identical duplicates are ACKed without a second inbox entry.**
+> 
+> Processing an item removes its payload but keeps its digest tombstone, which does not expire. 
+> Full stores reject new evidence without ACKing it, so monitor capacity; quotas bound logical data, not the H2 file size. 
+> Evidence is plaintext on disk, so protect the database and backups; restoring an old receiver backup can discard receipt history, and log flushing cannot recover a lost disk. 
+> Application side effects still need their own idempotency.
 
 ## Integration responsibilities
 
 - Packet direction and role authorization are enforced by your handlers.
-- `GmaApiECCAuthServer` verifies one fixed public key; resolve per-user keys with the multi-client variants or a custom `GmaAuthServer`.
 - Transport reconnects and committing application side effects stay with the application.
 - The server WebSocket transport does not configure TLS or validate `Origin`. Terminate TLS and enforce allowed origins in a proxy, or provide a custom transport.
 

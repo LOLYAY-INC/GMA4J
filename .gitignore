@@ -17,7 +17,7 @@ buildNumber.properties
 build/
 !**/src/main/**/build/
 !**/src/test/**/build/
-
+TODO.md
 # Logs
 *.log
 logs/
