@@ -104,6 +104,38 @@ class H2DeliveryStoreTest {
     }
 
     @Test
+    void processedTombstonesAreBoundedAndOldestExpire() {
+        // keep only the 2 most-recent tombstones so processed receipts cannot exhaust maxRecords
+        DeliveryLimits limits = new DeliveryLimits(8, 10, 1024, 4, 2);
+        try (H2DeliveryStore store = H2DeliveryStore.open(tempDir.resolve("tombstone-bound"), limits)) {
+            DurableDeliverySession session = new DurableDeliverySession("peer", store);
+            Object token = new Object();
+            session.attachAuthenticated(token, sender(packet -> { }));
+
+            List<UUID> ids = new ArrayList<>();
+            for (int i = 0; i < 5; i++) {
+                UUID id = UUID.randomUUID();
+                ids.add(id);
+                session.handleTransfer(token, new DeliveryTransferPacket(id, new byte[]{(byte) i}));
+                assertTrue(session.markProcessed(id));
+            }
+
+            // compaction bounds record growth to the two newest tombstones
+            assertEquals(2, session.inboxRecordCount());
+
+            // a resend of a still-remembered transfer is deduplicated, no new record
+            session.handleTransfer(token, new DeliveryTransferPacket(ids.get(4), new byte[]{4}));
+            assertEquals(2, session.inboxRecordCount());
+            assertTrue(session.pollInbox(4).isEmpty());
+
+            // a resend of a compacted (expired) transfer is accepted again as fresh evidence
+            session.handleTransfer(token, new DeliveryTransferPacket(ids.get(0), new byte[]{0}));
+            assertEquals(3, session.inboxRecordCount());
+            assertEquals(1, session.pollInbox(4).size());
+        }
+    }
+
+    @Test
     void duplicateOutboundIdRequiresIdenticalContent() {
         try (H2DeliveryStore store = H2DeliveryStore.open(tempDir.resolve("outbox-conflict"), limits(4, 64))) {
             DurableDeliverySession session = new DurableDeliverySession("peer", store);

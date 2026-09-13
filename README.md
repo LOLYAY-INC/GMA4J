@@ -349,7 +349,7 @@ UUID transferId = delivery.enqueue(evidenceBytes);   // works offline, commits b
 
 > **Identical duplicates are ACKed without a second inbox entry.**
 > 
-> Processing an item removes its payload but keeps its digest tombstone, which does not expire. 
+> Processing an item removes its payload but keeps its digest tombstone for dedup. Tombstones are bounded: only the `maxProcessedTombstones` most-recent processed receipts are kept, older ones are compacted away so they cannot exhaust `maxRecords` on a long-running system. A resend older than that window is accepted again as fresh evidence rather than deduplicated. 
 > Full stores reject new evidence without ACKing it, so monitor capacity; quotas bound logical data, not the H2 file size. 
 > Evidence is plaintext on disk, so protect the database and backups; restoring an old receiver backup can discard receipt history, and log flushing cannot recover a lost disk. 
 > Application side effects still need their own idempotency.

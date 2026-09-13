@@ -236,9 +236,40 @@ public final class H2DeliveryStore implements AutoCloseable {
                 statement.setObject(2, transferId);
                 requireOneRow(statement.executeUpdate(), "mark inbox evidence processed");
             }
-            updateQuota(quota.recordCount(), quota.payloadBytes() - payloadLength);
+            // compact dedup tombstones so processed receipts cannot grow unbounded against maxRecords
+            long recordCount = quota.recordCount() - compactTombstones();
+            updateQuota(recordCount, quota.payloadBytes() - payloadLength);
             return true;
         });
+    }
+
+    /**
+     * Deletes the oldest processed tombstones beyond the configured bound, newest kept for dedup.
+     * Returns how many were removed so the caller can adjust the record quota.
+     */
+    private int compactTombstones() throws SQLException {
+        int excess = processedTombstoneCount() - limits.maxProcessedTombstones();
+        if (excess <= 0) {
+            return 0;
+        }
+        try (PreparedStatement statement = connection.prepareStatement(
+                "DELETE FROM GMA4J_DELIVERY_INBOX WHERE PROCESSED = TRUE AND SEQUENCE IN"
+                        + " (SELECT SEQUENCE FROM GMA4J_DELIVERY_INBOX WHERE PROCESSED = TRUE"
+                        + " ORDER BY SEQUENCE FETCH FIRST ? ROWS ONLY)")) {
+            statement.setInt(1, excess);
+            return statement.executeUpdate();
+        }
+    }
+
+    private int processedTombstoneCount() throws SQLException {
+        try (Statement statement = connection.createStatement();
+             ResultSet rows = statement.executeQuery(
+                     "SELECT COUNT(*) FROM GMA4J_DELIVERY_INBOX WHERE PROCESSED = TRUE")) {
+            if (!rows.next()) {
+                throw new DeliveryException("failed to count processed tombstones");
+            }
+            return Math.toIntExact(rows.getLong(1));
+        }
     }
 
     int outboxCount(String peer) {
