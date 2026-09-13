@@ -213,6 +213,11 @@ public class PacketPipeline {
         int packetId = ((data[6] & 0xFF) << 8) | (data[7] & 0xFF);
 
         if (!CodecRegistry.getInstance().isValid(packetId)) {
+            if (SharedConfig.IGNORE_CODEC_HASH) {
+                // peer registered a packet we don't have; drop it instead of tearing the connection down
+                log.warn("Dropping packet with unknown id {} (IGNORE_CODEC_HASH)", packetId);
+                return null;
+            }
             throw new PacketCodingException("Invalid packet id: " + packetId);
         }
         if (codecOrdinal >= CodecType.values().length) {

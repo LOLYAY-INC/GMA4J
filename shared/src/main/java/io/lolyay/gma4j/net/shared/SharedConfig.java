@@ -8,6 +8,10 @@ public class SharedConfig {
     public static CodecType DEFAULT_CODEC_TYPE = CodecType.JSON_GSON; //gmtd soon
     public static boolean FORCE_CODEC = false;
     public static boolean ALLOW_PACKETS_UNAUTHED = false;
+    // Accept peers whose codec set differs: skip the handshake codec-hash rejection and drop (warn on)
+    // unknown packet ids instead of closing. ONLY safe when the same numeric id maps to the same packet
+    // on every node (e.g. content-derived ids); with registration-order ids a shared id can misdecode.
+    public static boolean IGNORE_CODEC_HASH = false;
     public static int MAX_PACKET_SIZE = 1024 * 1024;
     public static int MAX_PENDING_OUTBOUND_BYTES = 8 * 1024 * 1024;
     public static int MAX_PENDING_OUTBOUND_PACKETS = 256;

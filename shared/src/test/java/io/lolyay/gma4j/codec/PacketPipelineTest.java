@@ -424,6 +424,32 @@ class PacketPipelineTest {
         }
     }
 
+    @Test
+    void unknownPacketIdDroppedWhenIgnoringCodecHash() {
+        boolean previous = SharedConfig.IGNORE_CODEC_HASH;
+        AtomicInteger closes = new AtomicInteger();
+        try {
+            SharedConfig.IGNORE_CODEC_HASH = true;
+            PacketPipeline sender = pipeline();
+            sender.encode(new TinyPacket(0));            // consumes sequence 0
+            byte[] next = sender.encode(new TinyPacket(7)); // sequence 1
+
+            PacketPipeline receiver = new PacketPipeline(closes::incrementAndGet, noopDistributor());
+            // unknown id at sequence 0 is dropped, not fatal, and the sequence still advances
+            assertNull(receiver.decode(header(0, 0, 0x7FFF)));
+            assertEquals(0, closes.get());
+            // the next real packet at sequence 1 still decodes, proving alignment held
+            assertEquals(new TinyPacket(7), receiver.decode(next));
+        } finally {
+            SharedConfig.IGNORE_CODEC_HASH = previous;
+        }
+    }
+
+    @Test
+    void unknownPacketIdStillThrowsByDefault() {
+        assertThrows(PacketCodingException.class, () -> pipeline().decode(header(0, 0, 0x7FFF)));
+    }
+
     private static PacketPipeline pipeline() {
         return new PacketPipeline(() -> {}, noopDistributor());
     }
