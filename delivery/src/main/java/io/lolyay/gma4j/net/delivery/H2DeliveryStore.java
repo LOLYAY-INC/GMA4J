@@ -17,7 +17,7 @@ import java.util.*;
  * File-backed durable evidence store. Payloads are plaintext at rest. WRITE_DELAY=0 cannot make
  * guarantees beyond those provided by the operating system and storage hardware.
  */
-@SuppressWarnings("ALL")
+@SuppressWarnings("SqlResolve")
 public final class H2DeliveryStore implements AutoCloseable {
     private static final int SCHEMA_VERSION = 1;
     private static final int MAX_PEER_LENGTH = 512;
@@ -70,19 +70,19 @@ public final class H2DeliveryStore implements AutoCloseable {
         }
     }
 
-    byte[] putOutbox(String peer, UUID transferId, byte[] payload) {
+    void putOutbox(String peer, UUID transferId, byte[] payload) {
         validatePeer(peer);
         Objects.requireNonNull(transferId, "transferId");
         byte[] evidence = copyAndValidatePayload(payload);
         byte[] digest = DeliveryDigest.sha256(evidence);
-        return transaction(() -> {
+        transaction(() -> {
             Quota quota = lockQuota();
             StoredTransfer existing = selectOutbox(peer, transferId);
             if (existing != null) {
                 requireMatchingContent(existing.payload(), existing.digest(), evidence, digest, transferId);
                 return digest;
             }
-            reserve(quota, 1, evidence.length);
+            reserve(quota, evidence.length);
             try (PreparedStatement statement = connection.prepareStatement(
                     "INSERT INTO GMA4J_DELIVERY_OUTBOX"
                             + " (PEER, TRANSFER_ID, DIGEST, PAYLOAD) VALUES (?, ?, ?, ?)")) {
@@ -115,7 +115,7 @@ public final class H2DeliveryStore implements AutoCloseable {
                 }
                 return null;
             }
-            reserve(quota, 1, evidence.length);
+            reserve(quota, evidence.length);
             try (PreparedStatement statement = connection.prepareStatement(
                     "INSERT INTO GMA4J_DELIVERY_INBOX"
                             + " (PEER, TRANSFER_ID, DIGEST, PAYLOAD, PROCESSED) VALUES (?, ?, ?, ?, FALSE)")) {
@@ -130,11 +130,11 @@ public final class H2DeliveryStore implements AutoCloseable {
         });
     }
 
-    boolean acknowledgeOutbox(String peer, UUID transferId, byte[] digest) {
+    void acknowledgeOutbox(String peer, UUID transferId, byte[] digest) {
         validatePeer(peer);
         Objects.requireNonNull(transferId, "transferId");
         byte[] receiptDigest = copyAndValidateDigest(digest);
-        return transaction(() -> {
+        transaction(() -> {
             Quota quota = lockQuota();
             StoredTransfer existing = selectOutbox(peer, transferId);
             if (existing == null) {
@@ -465,11 +465,11 @@ public final class H2DeliveryStore implements AutoCloseable {
         }
     }
 
-    private void reserve(Quota quota, long records, long payloadBytes) {
+    private void reserve(Quota quota, long payloadBytes) {
         long resultingRecords;
         long resultingBytes;
         try {
-            resultingRecords = Math.addExact(quota.recordCount(), records);
+            resultingRecords = Math.addExact(quota.recordCount(), 1);
             resultingBytes = Math.addExact(quota.payloadBytes(), payloadBytes);
         } catch (ArithmeticException exception) {
             throw new DeliveryCapacityException("delivery quota exceeded");

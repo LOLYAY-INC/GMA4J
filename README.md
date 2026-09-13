@@ -35,7 +35,7 @@ The artifacts ship on Maven Central and on the lolyay repo under the same coordi
 <dependency>
   <groupId>dev.lolyay.gma4j</groupId>
   <artifactId>gma4j-client</artifactId>   <!-- or gma4j-server, gma4j-ws, gma4j-netty, gma4j-delivery -->
-  <version>3.17.0</version>
+  <version>3.18.1</version>
 </dependency>
 ```
 
@@ -52,7 +52,7 @@ The artifacts ship on Maven Central and on the lolyay repo under the same coordi
 <dependency>
   <groupId>dev.lolyay.gma4j</groupId>
   <artifactId>gma4j-client</artifactId>   <!-- or gma4j-server, gma4j-ws, gma4j-netty, gma4j-delivery -->
-  <version>3.17.0</version>
+  <version>3.18.1</version>
 </dependency>
 ```
 
