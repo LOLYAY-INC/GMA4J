@@ -2,6 +2,7 @@ package io.lolyay.gma4j.net.codec.packetdistributer;
 
 import io.lolyay.gma4j.net.codec.packet.GMAPacket;
 import io.lolyay.gma4j.net.codec.systemcodec.callbacks.SystemPacketCallback;
+import io.lolyay.gma4j.net.shared.SharedConfig;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -18,7 +19,7 @@ public class PacketDistributorImpl implements IPacketDistributor {
     public final <T extends GMAPacket<T>> void distribute(T packet) {
         if(packet.getPacketType().isSystem())
             systemPacketCallback.onSystemPacket(packet);
-        else if(authStatus.get() && !packetHandler.handle(packet))
+        else if((authStatus.get() || SharedConfig.ALLOW_PACKETS_UNAUTHED) && !packetHandler.handle(packet))
             log.error("Unhandled packet: {}", packet.getPacketType().numericId());
     }
 }
