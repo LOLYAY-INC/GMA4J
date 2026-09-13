@@ -83,7 +83,7 @@ public class ServerConnection implements ClientConnectionListener { // client ha
         }
 
         if(!data.getPacketType().isSystem() && !netClient.isAuthenticated() && !SharedConfig.ALLOW_PACKETS_UNAUTHED) {
-            throw new IllegalStateException("Cannot send non-system packet without authentication");
+            return CompletableFuture.failedFuture(new IllegalStateException("Cannot send non-system packet without authentication"));
         }
 
         boolean expedite = urgent && settings.isLowLatency();

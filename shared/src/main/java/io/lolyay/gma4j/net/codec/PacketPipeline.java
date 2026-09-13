@@ -222,7 +222,7 @@ public class PacketPipeline {
         CodecType codecType = CodecType.values()[codecOrdinal];
         PacketType<T> packetType = CodecRegistry.getInstance().getCodec(packetId);
         // app payloads stay opaque until the peer is authenticated
-        if (!packetType.isSystem() && !authGate.get()) {
+        if (!packetType.isSystem() && !authGate.get() && !SharedConfig.ALLOW_PACKETS_UNAUTHED) {
             log.warn("Application packet {} before authentication, closing", packetId);
             throw new ProtocolCloseSignal();
         }
