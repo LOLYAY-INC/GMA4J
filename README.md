@@ -27,6 +27,20 @@ GMA4J gives you auth, end-to-end encryption and pluggable transports (WebSocket 
 
 A client app depends on `gma4j-client` plus `gma4j-ws` and/or `gma4j-netty`; a server app on `gma4j-server` (and optionally on `gma4j-delivery`). Requires **Java 21+**.
 
+The artifacts ship on Maven Central and on the lolyay repo under the same coordinate; pick either.
+
+**Maven Central** (no repository declaration needed):
+
+```xml
+<dependency>
+  <groupId>dev.lolyay.gma4j</groupId>
+  <artifactId>gma4j-client</artifactId>   <!-- or gma4j-server, gma4j-ws, gma4j-netty, gma4j-delivery -->
+  <version>3.17.0</version>
+</dependency>
+```
+
+**lolyay repo**:
+
 ```xml
 <repositories>
   <repository>
@@ -36,7 +50,7 @@ A client app depends on `gma4j-client` plus `gma4j-ws` and/or `gma4j-netty`; a s
 </repositories>
 
 <dependency>
-  <groupId>io.lolyay.gma4j</groupId>
+  <groupId>dev.lolyay.gma4j</groupId>
   <artifactId>gma4j-client</artifactId>   <!-- or gma4j-server, gma4j-ws, gma4j-netty, gma4j-delivery -->
   <version>3.17.0</version>
 </dependency>
