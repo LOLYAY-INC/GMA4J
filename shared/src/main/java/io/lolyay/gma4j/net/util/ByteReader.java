@@ -1,7 +1,7 @@
 package io.lolyay.gma4j.net.util;
 
-import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -23,7 +23,7 @@ public final class ByteReader {
     }
 
     public <T extends Enum<T>> List<T> readPrefixedEnumArray(Class<T> enumType, int max) {
-        List<T> list = new ObjectArrayList<>();
+        List<T> list = new ArrayList<>();
         int size = readVarInt();
         if (size < 0 || size > max) {
             throw new IndexOutOfBoundsException("Bad PrefixedEnumArray size: " + size + " (max " + max + ")");
@@ -40,7 +40,7 @@ public final class ByteReader {
     }
 
     public <T> List<T> readPrefixedArray(Supplier<T> reader) {
-        List<T> list = new ObjectArrayList<>();
+        List<T> list = new ArrayList<>();
         int size = readVarInt();
         // every element consumes at least one byte, so remaining bytes bound the count
         if (size < 0 || size > end - pos) {

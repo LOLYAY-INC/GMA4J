@@ -1,5 +1,6 @@
 package io.lolyay.gma4j.net.codec.systemcodec.s2c;
 
+import java.util.ArrayList;
 import io.lolyay.gma4j.net.codec.CodecConfig;
 import io.lolyay.gma4j.net.codec.packet.CustomCodec;
 import io.lolyay.gma4j.net.codec.packet.GMAPacket;
@@ -7,7 +8,6 @@ import io.lolyay.gma4j.net.codec.packet.PacketType;
 import io.lolyay.gma4j.net.codec.systemcodec.SystemCodec;
 import io.lolyay.gma4j.net.util.ByteReader;
 import io.lolyay.gma4j.net.util.ByteWriter;
-import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -33,7 +33,7 @@ public record S2CCodecStateUpdatePacket(
     public static S2CCodecStateUpdatePacket of(CodecConfig codecState) {
         int version = codecState.systemCodecVersion();
         byte[] global = codecState.globalCodecState();
-        List<CodecUpdateState> states = new ObjectArrayList<>();
+        List<CodecUpdateState> states = new ArrayList<>();
         codecState.codecState().forEach(pType -> states.add(new CodecUpdateState(
                 pType.packetHash(),
                 pType.packetType().codec().getClazz().getSimpleName(),
