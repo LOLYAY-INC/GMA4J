@@ -69,9 +69,9 @@ public class WsClientTransport implements IClientTransport {
                 listener.onConnectionError(ex);
             }
         };
-        // custom trust for self-signed / pinned wss; null keeps Java-WebSocket's system-CA default
+        // custom trust applies to wss only; an SSL factory on a ws:// URI would force TLS on a plaintext peer
         javax.net.ssl.SSLContext sslContext = listener.sslContext();
-        if (sslContext != null) {
+        if (sslContext != null && "wss".equalsIgnoreCase(uri.getScheme())) {
             client.setSocketFactory(sslContext.getSocketFactory());
         }
         // the engine works on its own copy of the draft

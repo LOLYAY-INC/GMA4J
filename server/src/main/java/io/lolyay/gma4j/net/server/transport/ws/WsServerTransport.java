@@ -120,7 +120,11 @@ public class WsServerTransport implements IServerTransport {
         }
     }
 
-    /** Browsers send Origin; native clients do not, so an absent Origin is allowed */
+    /**
+     * Browsers send Origin; native clients do not, so an absent Origin is allowed.
+     * Rejecting here aborts the HTTP upgrade (Java-WebSocket replies 404 and closes),
+     * so the peer never sees a WebSocket close frame.
+     */
     private static void rejectDisallowedOrigin(java.util.Set<String> allowedOrigins, ClientHandshake request)
             throws InvalidDataException {
         if (allowedOrigins.isEmpty()) {

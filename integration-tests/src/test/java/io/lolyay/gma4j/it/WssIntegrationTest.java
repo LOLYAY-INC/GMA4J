@@ -110,10 +110,48 @@ class WssIntegrationTest {
         try {
             assertEquals(101, handshakeStatus(port, "https://good.example"), "allowed origin must upgrade");
             assertEquals(101, handshakeStatus(port, null), "native client (no Origin) must upgrade");
-            int rejected = handshakeStatus(port, "https://evil.example");
-            assertTrue(rejected != 101, "disallowed origin must be refused, got " + rejected);
+            // Java-WebSocket aborts a rejected upgrade with HTTP 404 (no WebSocket, so no close frame)
+            assertEquals(404, handshakeStatus(port, "https://evil.example"), "disallowed origin must be refused");
         } finally {
             assertDoesNotThrow(server::stop);
+        }
+    }
+
+    @Test
+    void clientSslContextIsIgnoredForPlaintextWs() throws Exception {
+        int port = freePort();
+        URI uri = URI.create("ws://127.0.0.1:" + port);
+        AtomicReference<ClientGreetingPacket> echo = new AtomicReference<>();
+        CountDownLatch echoed = new CountDownLatch(1);
+
+        GMA4JServer server = new GMA4JServer(new ServerEventHandler() {
+            @Override
+            public boolean handle(ClientOnServer client, GMAPacket<?> packet) {
+                if (packet instanceof ClientGreetingPacket greeting) {
+                    client.send(greeting);
+                    return true;
+                }
+                return false;
+            }
+        }, hostKey());
+        server.start(new ServerBindInfo("127.0.0.1", port, "ws", new GmaNoAuthServer()));
+
+        EchoClient handler = new EchoClient(echo, echoed);
+        GMA4JClient client = new GMA4JClient(handler);
+        handler.client = client;
+        // a configured SSL context must not force TLS onto a ws:// endpoint
+        client.setSslContext(clientContext());
+
+        try {
+            client.connect(new ClientConnectionInfo("ws-client", uri, ClientAuth.none()));
+            assertTrue(echoed.await(20, TimeUnit.SECONDS), "ws connection with an SSL context set failed");
+            assertTrue(handler.error.get() == null, () -> "client error: " + handler.error.get());
+        } finally {
+            try {
+                assertDoesNotThrow(client::disconnect);
+            } finally {
+                assertDoesNotThrow(server::stop);
+            }
         }
     }
 

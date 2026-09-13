@@ -9,9 +9,14 @@ public record ServerTransportData(String host, int port, boolean useUpgradeRedir
                                   SSLContext sslContext, Set<String> allowedOrigins) {
 
     public ServerTransportData {
-        // origins compare case-insensitively; null means no restriction
+        // origins compare case-insensitively; null set means no restriction, null entries are a caller bug
         allowedOrigins = allowedOrigins == null ? Set.of()
-                : allowedOrigins.stream().map(o -> o.toLowerCase(Locale.ROOT)).collect(Collectors.toUnmodifiableSet());
+                : allowedOrigins.stream().map(o -> {
+                    if (o == null) {
+                        throw new IllegalArgumentException("allowedOrigins must not contain null");
+                    }
+                    return o.toLowerCase(Locale.ROOT);
+                }).collect(Collectors.toUnmodifiableSet());
     }
 
     public ServerTransportData(String host, int port) {
