@@ -33,12 +33,9 @@
     <properties>
         <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-
-        <jetty.version>11.0.17</jetty.version>
         <netty.version>4.1.100.Final</netty.version>
         <gson.version>2.13.1</gson.version>
         <h2.version>2.3.232</h2.version>
-        <fastutil.version>8.5.15</fastutil.version>
         <javawebsocket.version>1.6.0</javawebsocket.version>
         <slf4j.version>2.0.13</slf4j.version>
         <logback.version>1.5.6</logback.version>
@@ -64,23 +61,6 @@
                 <version>${project.version}</version>
             </dependency>
 
-            <!-- Jetty (server transport) -->
-            <dependency>
-                <groupId>org.eclipse.jetty</groupId>
-                <artifactId>jetty-server</artifactId>
-                <version>${jetty.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.eclipse.jetty</groupId>
-                <artifactId>jetty-servlet</artifactId>
-                <version>${jetty.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.eclipse.jetty.websocket</groupId>
-                <artifactId>websocket-jetty-server</artifactId>
-                <version>${jetty.version}</version>
-            </dependency>
-
             <!-- Java-WebSocket (client transport) -->
             <dependency>
                 <groupId>org.java-websocket</groupId>
@@ -91,7 +71,17 @@
             <!-- Netty (TCP transport) -->
             <dependency>
                 <groupId>io.netty</groupId>
-                <artifactId>netty-all</artifactId>
+                <artifactId>netty-transport</artifactId>
+                <version>${netty.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.netty</groupId>
+                <artifactId>netty-handler</artifactId>
+                <version>${netty.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.netty</groupId>
+                <artifactId>netty-codec</artifactId>
                 <version>${netty.version}</version>
             </dependency>
 
@@ -109,13 +99,6 @@
                 <version>${gson.version}</version>
             </dependency>
 
-            <!-- fastutil -->
-            <dependency>
-                <groupId>it.unimi.dsi</groupId>
-                <artifactId>fastutil</artifactId>
-                <version>${fastutil.version}</version>
-            </dependency>
-
             <!-- Logging -->
             <dependency>
                 <groupId>org.slf4j</groupId>
@@ -126,11 +109,6 @@
                 <groupId>ch.qos.logback</groupId>
                 <artifactId>logback-classic</artifactId>
                 <version>${logback.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.slf4j</groupId>
-                <artifactId>jul-to-slf4j</artifactId>
-                <version>${slf4j.version}</version>
             </dependency>
 
             <!-- Lombok -->

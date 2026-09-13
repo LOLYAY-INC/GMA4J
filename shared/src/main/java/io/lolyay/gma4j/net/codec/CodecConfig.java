@@ -1,21 +1,22 @@
 package io.lolyay.gma4j.net.codec;
 
+import java.util.ArrayList;
+import java.util.List;
 import io.lolyay.gma4j.net.codec.packet.GMAPacket;
 import io.lolyay.gma4j.net.codec.packet.PacketType;
 import io.lolyay.gma4j.net.shared.CodecHasher;
 import io.lolyay.gma4j.net.shared.ENV;
-import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Comparator;
 
-public record CodecConfig(ObjectArrayList<CodecState> codecState, byte[] globalCodecState, int systemCodecVersion) {
+public record CodecConfig(List<CodecState> codecState, byte[] globalCodecState, int systemCodecVersion) {
     public record CodecState(byte[] packetHash, PacketType<? extends GMAPacket<?>> packetType) {}
 
     public static CodecConfig generate(Collection<PacketType<? extends GMAPacket<?>>> packetTypes) {
-        ObjectArrayList<CodecState> tempState = new ObjectArrayList<>();
+        List<CodecState> tempState = new ArrayList<>();
         for (PacketType<? extends GMAPacket<?>> packetType : packetTypes) {
             tempState.add(new CodecState(packetType.codec().hash(), packetType));
         }

@@ -1,7 +1,9 @@
 package io.lolyay.gma4j.net.codec.auth.server;
 
-import it.unimi.dsi.fastutil.objects.ObjectArrayList;
+import java.util.ArrayList;
+import java.util.List;
+
 
 public class GmaServerAuth {
-    private final ObjectArrayList<GmaAuthServer> authServers = new ObjectArrayList<>();
+    private final List<GmaAuthServer> authServers = new ArrayList<>();
 }
