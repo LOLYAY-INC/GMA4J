@@ -52,7 +52,7 @@ public class GMA4JNetClient {
     @Setter
     private volatile long lastPing = System.currentTimeMillis();
 
-    @Getter
+    @Setter
     private volatile boolean authenticated = false;
     @Getter(AccessLevel.NONE)
     private ScheduledExecutorService scheduler;
@@ -200,10 +200,6 @@ public class GMA4JNetClient {
 
     public <T extends GMAPacket<T>> CompletableFuture<Void> sendWithCompletion(T packet, boolean urgent) {
         return serverConnection.sendWithCompletion(packet, urgent);
-    }
-
-    public boolean isAuthenticated() {
-        return authenticated;
     }
 
     public void requestModes(boolean lowLatency, boolean bigSize, int requestedMaxPacketSize) {
