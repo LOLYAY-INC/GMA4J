@@ -182,9 +182,10 @@ public class ServerDefaultSystemPacketCallback implements SystemPacketCallback {
             return;
         }
 
-        if(client.getClientType() != ClientType.GMA4J_JAVA) {
-            // Send Compat packet
-            client.send(S2CCodecStateUpdatePacket.of(CodecRegistry.getInstance().getConfig()));
+        // the id table must land before the auth status so the peer is remapped by the time onAuthSuccess fires;
+        // it comes from the registry verifyCompatibility hashed against, not the singleton
+        if(client.needsCodecStateUpdate()) {
+            client.send(S2CCodecStateUpdatePacket.of(client.getNetServer().getCodecRegistry().getConfig()));
         }
 
         if(!client.isConnected()) {

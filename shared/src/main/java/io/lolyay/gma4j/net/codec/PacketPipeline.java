@@ -33,9 +33,12 @@ public class PacketPipeline {
     private int remoteSequence;
     private int outOfSequenceCount;
     private int decodeErrorCount;
+    private int unknownIdCount;
     private final IPacketDistributor distributor;
     @Getter
     private final Supplier<Boolean> authGate;
+    /** Server-authoritative id translation, null means our ids are the server's (identity) */
+    private volatile CodecRemap remap;
     @Getter
     private final ConnectionSettings settings;
 
@@ -212,7 +215,21 @@ public class PacketPipeline {
         int codecOrdinal = data[5] & 0xFF;
         int packetId = ((data[6] & 0xFF) << 8) | (data[7] & 0xFF);
 
-        if (!CodecRegistry.getInstance().isValid(packetId)) {
+        // the wire id is the server's; a remap translates it back to our type
+        PacketType<T> packetType = resolveIncoming(packetId);
+        if (packetType == null) {
+            // leniency is for authenticated peers with a divergent packet set; an unauthenticated peer
+            // sending unknown ids is a probe and is bounded like any other malformed packet
+            boolean lenient = (SharedConfig.IGNORE_CODEC_HASH || remap != null) && authGate.get();
+            if (lenient && ++unknownIdCount <= SharedConfig.MAX_UNKNOWN_PACKET_IDS) {
+                log.warn("Dropping packet with unknown id {} ({}/{})", packetId, unknownIdCount,
+                        SharedConfig.MAX_UNKNOWN_PACKET_IDS);
+                return null;
+            }
+            if (lenient) {
+                log.warn("Closing connection, more than {} unknown packet ids", SharedConfig.MAX_UNKNOWN_PACKET_IDS);
+                throw new ProtocolCloseSignal();
+            }
             throw new PacketCodingException("Invalid packet id: " + packetId);
         }
         if (codecOrdinal >= CodecType.values().length) {
@@ -220,7 +237,6 @@ public class PacketPipeline {
         }
 
         CodecType codecType = CodecType.values()[codecOrdinal];
-        PacketType<T> packetType = CodecRegistry.getInstance().getCodec(packetId);
         // app payloads stay opaque until the peer is authenticated
         if (!packetType.isSystem() && !authGate.get() && !SharedConfig.ALLOW_PACKETS_UNAUTHED) {
             log.warn("Application packet {} before authentication, closing", packetId);
@@ -265,6 +281,14 @@ public class PacketPipeline {
         boolean compressed = false;
         CodecType codecType = packet.getPacketType().codec().getCodecType();
         int packetId = packet.getPacketType().numericId();
+        if (remap != null) {
+            // the server is the id authority, so a packet it never registered cannot be addressed
+            packetId = remap.toRemote(packetId);
+            if (packetId < 0) {
+                throw new PacketCodingException("Packet " + packet.getClass().getSimpleName()
+                        + " is not known to the peer and cannot be sent");
+            }
+        }
 
         try {
             payload = packet.getPacketType().codec().serialize(packet);
@@ -323,6 +347,24 @@ public class PacketPipeline {
         if (data.length > limit) {
             throw new PacketCodingException("Packet too large: " + data.length + " > " + limit);
         }
+    }
+
+    /** Installs the server's id table; both directions translate through it from then on */
+    public void setRemap(CodecRemap remap) {
+        synchronized (encodeLock) {
+            synchronized (decodeLock) {
+                this.remap = remap;
+            }
+        }
+    }
+
+    private <T extends GMAPacket<T>> PacketType<T> resolveIncoming(int packetId) {
+        CodecRegistry registry = CodecRegistry.getInstance();
+        CodecRemap current = remap;
+        if (current != null) {
+            return current.toLocal(packetId, registry);
+        }
+        return registry.isValid(packetId) ? registry.getCodec(packetId) : null;
     }
 
     private void requireOpen() {

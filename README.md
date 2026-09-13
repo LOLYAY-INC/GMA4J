@@ -310,6 +310,30 @@ After `onAuthSuccess()` a client may request **low latency** and/or **big size**
 - **Big size** raises the per-packet limit above the base `SharedConfig.MAX_PACKET_SIZE` (1 MiB). Grants are clamped by `MAX_BIG_PACKET_SIZE` (32 MiB per client), drawn from the server-wide `BIG_SIZE_TOTAL_BUDGET` (256 MiB, returned on disconnect), and on both sides to what the outbound queue can hold twice (`MAX_PENDING_OUTBOUND_BYTES / 2` minus framing, about 4 MiB by default). The WebSocket transport enforces the current allowance per connection from the frame header, so an unauthenticated peer cannot make the server buffer more than the base size.
 - `ALLOW_LOW_LATENCY_MODE` / `ALLOW_BIG_SIZE_MODE` switch each mode off globally. Requests are rate limited (`MODE_CHANGE_MIN_INTERVAL_MS`, 1s); flooding them disconnects the client.
 
+## Packet ids and heterogeneous nodes
+
+Packet ids are assigned at `warmup()` in a deterministic order derived from the registered set, so two
+nodes that register the same packets get the same ids. By default a client whose set differs from the
+server's is rejected at the handshake ("Codec hash mismatch"), which is the safe choice when every node
+runs the same code.
+
+Set `SharedConfig.IGNORE_CODEC_HASH = true` (on the server) to let nodes with **different packet sets**
+talk, for example a proxy and backends that each run different plugins. The server is the id authority:
+after auth it sends its id table (`S2CCodecStateUpdatePacket`) and the client remaps onto it, so the
+wire format is unchanged and matching-set clients pay nothing. Then:
+
+- a packet the server never registered cannot be sent from that client (`send` fails with a clear error);
+- a server packet the client does not know is dropped with a warning, the stream stays aligned;
+- the table lands before `onAuthSuccess`, so the remap is in place before you can send.
+
+Give shared packets a **namespace** so they match unambiguously across nodes regardless of class name
+or shape: `new PacketType<>(1, codec, "myplugin")`. `("myplugin", 1)` and `("otherplugin", 1)` are
+different packets; the same pair on two nodes is the same packet. Without a namespace, matching falls
+back to the class fingerprint, then the class simple name (logged, since the shape may differ).
+
+Remap fixes *identity*, not *shape*: if a packet's fields changed between two nodes it still decodes
+wrong, and those count as decode errors. Bump the packet's id when you change its fields.
+
 ## Limits and timeouts
 
 All knobs live on `io.lolyay.gma4j.net.shared.SharedConfig`; set them before opening connections.

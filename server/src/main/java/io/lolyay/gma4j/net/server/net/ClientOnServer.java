@@ -53,6 +53,8 @@ public class ClientOnServer implements ServerConnectionListener, IPacketHandler 
     private long lastModeChangeAt;
     @Getter(AccessLevel.NONE)
     private int modeChangeViolations;
+    @Getter(AccessLevel.NONE)
+    private volatile boolean codecMismatch;
 
     @Getter
     @Setter
@@ -319,9 +321,20 @@ public class ClientOnServer implements ServerConnectionListener, IPacketHandler 
             return "Encryption codec version mismatch: Client: " + helloPacket.encVersion() + " != Our: " + ENV.ENCRYPTION_CODEC_VERSION;
         if(helloPacket.gma4jVersion() != ENV.GMA4J_VERSION)
             log.warn("Client {} is using a different version of GMA4J, please update!", remoteId);
-        if(helloPacket.clientType() == ClientType.GMA4J_JAVA && !Arrays.equals(helloPacket.codecHash(), netServer.getCodecRegistry().getConfig().globalCodecState()))
-            return "Codec hash mismatch: Client: " + Arrays.toString(helloPacket.codecHash()) + " != Our: " + Arrays.toString(netServer.getCodecRegistry().getConfig().globalCodecState());
+        if(helloPacket.clientType() == ClientType.GMA4J_JAVA && !Arrays.equals(helloPacket.codecHash(), netServer.getCodecRegistry().getConfig().globalCodecState())) {
+            if(SharedConfig.IGNORE_CODEC_HASH) {
+                codecMismatch = true;
+                log.warn("Codec hash mismatch for {} accepted (IGNORE_CODEC_HASH), the peer will remap to our ids", remoteId);
+            } else {
+                return "Codec hash mismatch: Client: " + Arrays.toString(helloPacket.codecHash()) + " != Our: " + Arrays.toString(netServer.getCodecRegistry().getConfig().globalCodecState());
+            }
+        }
         return null;
+    }
+
+    /** True when the hello hash differed and was accepted, the peer then needs our id table */
+    public boolean needsCodecStateUpdate() {
+        return codecMismatch || clientType != ClientType.GMA4J_JAVA;
     }
 
     private String describe() {

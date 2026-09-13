@@ -8,6 +8,11 @@ public class SharedConfig {
     public static CodecType DEFAULT_CODEC_TYPE = CodecType.JSON_GSON; //gmtd soon
     public static boolean FORCE_CODEC = false;
     public static boolean ALLOW_PACKETS_UNAUTHED = false;
+    // Accept peers whose codec set differs. The server then sends its id table after auth and the
+    // client remaps onto it (the server is the id authority); unknown ids are dropped with a warning.
+    // Remap fixes identity, not shape: bump a packet's userSetId when its fields change.
+    public static boolean IGNORE_CODEC_HASH = false;
+    public static int MAX_UNKNOWN_PACKET_IDS = 64; // unknown ids an authenticated lenient peer may send before it is dropped
     public static int MAX_PACKET_SIZE = 1024 * 1024;
     public static int MAX_PENDING_OUTBOUND_BYTES = 8 * 1024 * 1024;
     public static int MAX_PENDING_OUTBOUND_PACKETS = 256;

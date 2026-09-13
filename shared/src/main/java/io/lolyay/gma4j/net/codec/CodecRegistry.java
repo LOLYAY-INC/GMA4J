@@ -43,6 +43,11 @@ public class CodecRegistry {
         return id >= 0 && id < CODEC_MAP.size();
     }
 
+    /** Ids below this are system packets, fixed and identical on every node */
+    public int systemIdBound() {
+        return SystemCodec.getSystemPackets().size();
+    }
+
 
 
 
