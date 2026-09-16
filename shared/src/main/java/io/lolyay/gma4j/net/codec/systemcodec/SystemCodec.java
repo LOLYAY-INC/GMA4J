@@ -1,5 +1,7 @@
 package io.lolyay.gma4j.net.codec.systemcodec;
 
+import java.util.ArrayList;
+import java.util.List;
 import io.lolyay.gma4j.net.codec.packet.GMAPacket;
 import io.lolyay.gma4j.net.codec.packet.PacketType;
 import io.lolyay.gma4j.net.codec.systemcodec.c2s.C2SAuthPacket;
@@ -8,12 +10,11 @@ import io.lolyay.gma4j.net.codec.systemcodec.c2s.C2SHelloPacket;
 import io.lolyay.gma4j.net.codec.systemcodec.c2s.C2SKeepAlivePacket;
 import io.lolyay.gma4j.net.codec.systemcodec.c2s.C2SModeRequestPacket;
 import io.lolyay.gma4j.net.codec.systemcodec.s2c.*;
-import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import lombok.Getter;
 
 public class SystemCodec {
     @Getter
-    private static final ObjectArrayList<PacketType<?>> systemPackets = new ObjectArrayList<>();
+    private static final List<PacketType<?>> systemPackets = new ArrayList<>();
 
     // Encryption
     public static final PacketType<C2SHelloPacket> C_2_S_HELLO_PACKET =

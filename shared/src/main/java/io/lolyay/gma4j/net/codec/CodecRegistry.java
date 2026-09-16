@@ -1,10 +1,11 @@
 package io.lolyay.gma4j.net.codec;
 
+import java.util.ArrayList;
+import java.util.List;
 import io.lolyay.gma4j.net.codec.packet.GMAPacket;
 import io.lolyay.gma4j.net.codec.packet.PacketType;
 import io.lolyay.gma4j.net.codec.systemcodec.SystemCodec;
 import io.lolyay.gma4j.net.util.HexUtils;
-import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
@@ -14,9 +15,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class CodecRegistry {
     @Getter
     private CodecConfig config = null;
-    private final ObjectArrayList<PacketType<? extends GMAPacket<?>>> CODEC_MAP = new ObjectArrayList<>();
+    private final List<PacketType<? extends GMAPacket<?>>> CODEC_MAP = new ArrayList<>();
 
-    private final ObjectArrayList<PacketType<? extends GMAPacket<?>>> codecWarmupCache = new ObjectArrayList<>();
+    private final List<PacketType<? extends GMAPacket<?>>> codecWarmupCache = new ArrayList<>();
     private final AtomicInteger nextId = new AtomicInteger(0);
 
     public void addCodec(PacketType<? extends GMAPacket<?>> codec) {
