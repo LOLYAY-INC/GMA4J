@@ -24,7 +24,7 @@ public record S2CAuthChallengePacket(
                 ByteWriter writer = new ByteWriter();
                 writer.writePrefixedBytes(packet.challenge());
                 writer.writeUUID(packet.clientId());
-                return writer.getBuf();
+                return writer.toByteArray();
             },
             data -> {
                 ByteReader reader = new ByteReader(data);

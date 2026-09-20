@@ -23,7 +23,7 @@ public record S2CModeStatusPacket(
                 ByteWriter writer = new ByteWriter();
                 writer.writeByte((packet.lowLatency() ? 0x1 : 0) | (packet.bigSize() ? 0x2 : 0));
                 writer.writeVarInt(packet.maxPacketSize());
-                return writer.getBuf();
+                return writer.toByteArray();
             },
             data -> {
                 ByteReader reader = new ByteReader(data);

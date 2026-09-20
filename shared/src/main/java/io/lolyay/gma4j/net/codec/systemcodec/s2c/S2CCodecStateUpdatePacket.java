@@ -60,7 +60,7 @@ public record S2CCodecStateUpdatePacket(
                     writer.writeVarInt(codecUpdateState.userSetId);
                     writer.writePrefixedBytes(codecUpdateState.namespace.getBytes(StandardCharsets.UTF_8));
                 });
-                return writer.getBuf();
+                return writer.toByteArray();
             },
             data -> {
                 ByteReader reader = new ByteReader(data);

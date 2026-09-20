@@ -17,7 +17,7 @@ public record GatedPacket(int value) implements GMAPacket<GatedPacket> {
             packet -> {
                 ByteWriter writer = new ByteWriter();
                 writer.writeInt(packet.value());
-                return writer.getBuf();
+                return writer.toByteArray();
             },
             data -> {
                 DESERIALIZATIONS.incrementAndGet();

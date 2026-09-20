@@ -16,7 +16,7 @@ public record BlobPacket(byte[] blob, long checksum) implements GMAPacket<BlobPa
                 ByteWriter writer = new ByteWriter();
                 writer.writePrefixedBytes(packet.blob());
                 writer.writeLong(packet.checksum());
-                return writer.getBuf();
+                return writer.toByteArray();
             },
             data -> {
                 ByteReader reader = new ByteReader(data);

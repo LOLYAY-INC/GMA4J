@@ -57,18 +57,18 @@ public class NettyServerConnection implements MessageSender {
             return false;
         }
         boolean coalesced = coalesceFlush && !urgent;
-        if (coalesced && !channel.eventLoop().inEventLoop()) {
-            try {
-                channel.eventLoop().execute(() -> write(data, reservation, true, done));
-                return true;
-            } catch (RuntimeException failure) {
-                reservation.close();
-                close();
-                fail(done, failure);
-                return false;
-            }
+        // Always enqueue the write on the event loop in send-lock order. An inline
+        // write from an event-loop callback would otherwise overtake writes another
+        // thread already queued with earlier sequence numbers.
+        try {
+            channel.eventLoop().execute(() -> write(data, reservation, coalesced, done));
+            return true;
+        } catch (RuntimeException failure) {
+            reservation.close();
+            close();
+            fail(done, failure);
+            return false;
         }
-        return write(data, reservation, coalesced, done);
     }
 
     private boolean write(byte[] data, OutboundBudget.Reservation reservation, boolean coalesced, CompletableFuture<Void> done) {

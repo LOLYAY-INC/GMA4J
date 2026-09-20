@@ -13,7 +13,7 @@ public record ComplexPacketS2c(ComplexBody body) implements GMAPacket<ComplexPac
             packet -> {
                 ByteWriter writer = new ByteWriter();
                 ComplexBody.write(writer, packet.body());
-                return writer.getBuf();
+                return writer.toByteArray();
             },
             data -> new ComplexPacketS2c(ComplexBody.read(new ByteReader(data)))
     ));

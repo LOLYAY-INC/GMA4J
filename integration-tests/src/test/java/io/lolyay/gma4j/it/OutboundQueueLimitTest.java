@@ -64,8 +64,9 @@ class OutboundQueueLimitTest {
                 MessageSender sender = factory.apply(channel);
                 assertTrue(sender.send(new byte[1]));
                 assertTrue(sender.send(new byte[1]));
-                assertFalse(sender.send(new byte[1]));
+                channel.runPendingTasks();
                 assertEquals(2, handler.size());
+                assertFalse(sender.send(new byte[1]));
                 assertFalse(channel.isActive());
             } finally {
                 handler.releaseAll();
@@ -110,9 +111,10 @@ class OutboundQueueLimitTest {
             try {
                 MessageSender sender = factory.apply(channel);
                 assertTrue(sender.send(new byte[1]));
-                handler.succeedNext();
                 channel.runPendingTasks();
+                handler.succeedNext();
                 assertTrue(sender.send(new byte[1]));
+                channel.runPendingTasks();
                 assertEquals(1, handler.size());
             } finally {
                 handler.releaseAll();
@@ -132,6 +134,7 @@ class OutboundQueueLimitTest {
             try {
                 MessageSender sender = factory.apply(channel);
                 assertTrue(sender.send(new byte[1]));
+                channel.runPendingTasks();
                 handler.failNext();
                 channel.runPendingTasks();
                 assertFalse(channel.isActive());

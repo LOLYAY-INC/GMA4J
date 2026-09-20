@@ -14,7 +14,7 @@ public record C2SAuthResponsePacket(byte[] response) implements GMAPacket<C2SAut
             packet -> {
                 ByteWriter writer = new ByteWriter();
                 writer.writePrefixedBytes(packet.response());
-                return writer.getBuf();
+                return writer.toByteArray();
             },
             data -> {
                 ByteReader reader = new ByteReader(data);

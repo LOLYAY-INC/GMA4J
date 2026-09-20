@@ -70,7 +70,7 @@ public record C2SHelloPacket(
 
                 writer.writePrefixedEnumArray(packet.supportedAuthTypes());
                 writer.writePrefixedBytes(packet.customAuthData());
-                return writer.getBuf();
+                return writer.toByteArray();
             },
             data -> {
                 ByteReader reader = new ByteReader(data);

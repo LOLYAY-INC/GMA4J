@@ -19,7 +19,7 @@ public record S2CAuthStatusPacket(
             packet -> {
                 ByteWriter writer = new ByteWriter();
                 writer.writeBoolean(packet.success());
-                return writer.getBuf();
+                return writer.toByteArray();
             },
             data -> {
                 ByteReader reader = new ByteReader(data);
