@@ -21,7 +21,7 @@ public record BinaryPacket(int i, long l, boolean b, String s, int varint) imple
                 writer.writeBoolean(packet.b());
                 writer.writePrefixedBytes(packet.s().getBytes(StandardCharsets.UTF_8));
                 writer.writeVarInt(packet.varint());
-                return writer.getBuf();
+                return writer.toByteArray();
             },
             data -> {
                 ByteReader reader = new ByteReader(data);

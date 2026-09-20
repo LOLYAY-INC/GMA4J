@@ -7,7 +7,6 @@ import io.lolyay.gma4j.net.delivery.data.DeliveryLimits;
 import io.lolyay.gma4j.net.util.ByteReader;
 import io.lolyay.gma4j.net.util.ByteWriter;
 
-import java.util.Arrays;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -42,7 +41,7 @@ public record DeliveryTransferPacket(UUID transferId, byte[] payload)
         ByteWriter writer = new ByteWriter();
         writer.writeUUID(packet.transferId);
         writer.writePrefixedBytes(packet.payload);
-        return Arrays.copyOf(writer.getBuf(), writer.length());
+        return writer.toByteArray();
     }
 
     private static DeliveryTransferPacket decode(byte[] data) {

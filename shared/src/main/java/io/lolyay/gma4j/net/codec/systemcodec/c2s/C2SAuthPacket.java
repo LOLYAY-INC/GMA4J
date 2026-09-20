@@ -21,7 +21,7 @@ public record C2SAuthPacket(GmaAuthType authType, byte[] extraAuthData, String c
                 writer.writeByte(packet.authType().ordinal());
                 writer.writePrefixedBytes(packet.extraAuthData());
                 writer.writePrefixedBytes(packet.claimedClientId().getBytes(StandardCharsets.UTF_8));
-                return writer.getBuf();
+                return writer.toByteArray();
             },
             data -> {
                 ByteReader reader = new ByteReader(data);

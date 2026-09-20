@@ -122,6 +122,11 @@ public final class ByteWriter {
         return len;
     }
 
+    /** A right-sized copy of the written bytes, without the backing array's spare capacity */
+    public byte[] toByteArray() {
+        return Arrays.copyOf(buf, len);
+    }
+
     public void writeUUID(UUID uuid) {
         writeLong(uuid.getMostSignificantBits());
         writeLong(uuid.getLeastSignificantBits());

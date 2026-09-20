@@ -41,7 +41,7 @@ public record S2CHelloPacket(
                 writer.writeBytes(packet.serverNonce());
                 writer.writeByte(packet.selectedAuthType().ordinal());
                 writer.writePrefixedBytes(packet.signature());
-                return writer.getBuf();
+                return writer.toByteArray();
             },
             data -> {
                 ByteReader reader = new ByteReader(data);

@@ -15,7 +15,7 @@ public record C2SKeepAlivePacket(long id) implements GMAPacket<C2SKeepAlivePacke
             packet -> {
                 ByteWriter writer = new ByteWriter();
                 writer.writeLong(packet.id);
-                return writer.getBuf();
+                return writer.toByteArray();
             },
             data -> {
                 ByteReader reader = new ByteReader(data);

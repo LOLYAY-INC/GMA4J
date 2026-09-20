@@ -155,6 +155,7 @@ class SecurityHardeningIntegrationTest {
         NettyClientConnection connection = new NettyClientConnection(channel);
 
         CompletableFuture<Void> done = connection.sendWithCompletion(new byte[16], false);
+        channel.runPendingTasks();
         assertTrue(done.isDone() && !done.isCompletedExceptionally(), "write must complete");
         assertNotNull(channel.readOutbound(), "data must reach the channel");
         channel.finishAndReleaseAll();

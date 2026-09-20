@@ -18,7 +18,7 @@ public record ServerWelcomePacket(String greeting, int connectedClients) impleme
                 ByteWriter writer = new ByteWriter();
                 writer.writePrefixedBytes(packet.greeting().getBytes(StandardCharsets.UTF_8));
                 writer.writeInt(packet.connectedClients());
-                return writer.getBuf();
+                return writer.toByteArray();
             },
             data -> {
                 ByteReader reader = new ByteReader(data);

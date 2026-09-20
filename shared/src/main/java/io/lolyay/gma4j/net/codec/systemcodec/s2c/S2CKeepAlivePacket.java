@@ -13,7 +13,7 @@ public record S2CKeepAlivePacket(long id) implements GMAPacket<S2CKeepAlivePacke
             packet -> {
                 ByteWriter writer = new ByteWriter();
                 writer.writeLong(packet.id);
-                return writer.getBuf();
+                return writer.toByteArray();
             },
             data -> {
                 ByteReader reader = new ByteReader(data);
