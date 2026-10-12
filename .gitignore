@@ -61,3 +61,5 @@ Thumbs.db
 known_certs
 host.key
 host.pub
+
+.env
