@@ -35,7 +35,7 @@ The artifacts ship on Maven Central and on the lolyay repo under the same coordi
 <dependency>
   <groupId>dev.lolyay.gma4j</groupId>
   <artifactId>gma4j-client</artifactId>   <!-- or gma4j-server, gma4j-ws, gma4j-netty, gma4j-delivery -->
-  <version>3.19.0</version>
+  <version>3.20.0</version>
 </dependency>
 ```
 
@@ -52,9 +52,72 @@ The artifacts ship on Maven Central and on the lolyay repo under the same coordi
 <dependency>
   <groupId>dev.lolyay.gma4j</groupId>
   <artifactId>gma4j-client</artifactId>   <!-- or gma4j-server, gma4j-ws, gma4j-netty, gma4j-delivery -->
-  <version>3.19.0</version>
+  <version>3.20.0</version>
 </dependency>
 ```
+
+## Create and register packets
+
+### Define a packet
+
+Implement `GMAPacket<T>` and give the packet a shared `PacketType`. Put packet definitions in a module both the client and server depend on.
+
+```java
+import io.lolyay.gma4j.net.codec.packet.AutoCodec;
+import io.lolyay.gma4j.net.codec.packet.GMAPacket;
+import io.lolyay.gma4j.net.codec.packet.PacketType;
+
+public record GreetingPacket(String message) implements GMAPacket<GreetingPacket> {
+    public static final PacketType<GreetingPacket> TYPE =
+            new PacketType<>(1, new AutoCodec<>(GreetingPacket.class), "myapp");
+
+    @Override
+    public PacketType<GreetingPacket> getPacketType() {
+        return TYPE;
+    }
+}
+```
+
+`AutoCodec` serializes the record's fields using the configured default codec, Gson JSON by default. `PacketType` takes your application packet ID, the codec and an optional namespace. Give each packet in `"myapp"` a different ID, and use the same namespace, ID and fields on both peers. This application ID is not the final wire ID, which the registry assigns at warmup.
+
+### Register on both peers
+
+Run this once during startup in both the client and server processes:
+
+```java
+import io.lolyay.gma4j.net.codec.CodecRegistry;
+
+CodecRegistry.getInstance().addCodec(GreetingPacket.TYPE);
+```
+
+Register every application packet before the first `client.connect(...)` or `server.start(...)`. Both calls warm up the registry automatically. Registration after warmup does not add a packet to the active codec table. Defining `TYPE` alone does not register it.
+
+By default, both peers must register the same packet set, including packets they only send or only receive. See [Packet ids and heterogeneous nodes](#packet-ids-and-heterogeneous-nodes) for mismatched sets and namespace matching.
+
+### Send and handle packets
+
+After authentication, send a packet with:
+
+```java
+client.send(new GreetingPacket("Hello"));
+```
+
+On the server, `ClientOnServer.send(...)` sends to one authenticated client. The client and server setup sections below show the authentication callbacks.
+
+Receive packets in your event handler's `handle` method. For example, replace `MyServerHandler.handle` with:
+
+```java
+@Override
+public boolean handle(ClientOnServer client, GMAPacket<?> packet) {
+    if (packet instanceof GreetingPacket greeting) {
+        System.out.println(greeting.message());
+        return true;
+    }
+    return false;
+}
+```
+
+Use the same `instanceof` check in `MyClientHandler.handle` to receive the packet on the client. Return `true` for packets you handle and `false` for the rest. Your handlers must enforce packet direction and application permissions.
 
 ## Client
 

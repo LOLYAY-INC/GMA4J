@@ -42,7 +42,6 @@ public final class ByteReader {
     public <T> List<T> readPrefixedArray(Supplier<T> reader) {
         List<T> list = new ArrayList<>();
         int size = readVarInt();
-        // every element consumes at least one byte, so remaining bytes bound the count
         if (size < 0 || size > end - pos) {
             throw new IndexOutOfBoundsException("Bad PrefixedArray size: " + size);
         }
@@ -113,7 +112,6 @@ public final class ByteReader {
     }
 
     public byte[] readBytes(int length) {
-        // bounds first, a hostile length must not allocate
         if (length < 0 || length > end - pos) {
             throw new IndexOutOfBoundsException("ByteReader underflow: " + length + " bytes requested");
         }
@@ -132,7 +130,6 @@ public final class ByteReader {
                 throw new IndexOutOfBoundsException("VarInt too long");
             }
             b = readByte();
-            // fifth byte only carries bits 28-31, anything higher would overflow
             if (shift == 28 && (b & 0x70) != 0) {
                 throw new IndexOutOfBoundsException("VarInt overflow");
             }
@@ -151,7 +148,6 @@ public final class ByteReader {
                 throw new IndexOutOfBoundsException("VarLong too long");
             }
             b = readByte();
-            // tenth byte only carries bit 63, anything higher would overflow
             if (shift == 63 && (b & 0x7E) != 0) {
                 throw new IndexOutOfBoundsException("VarLong overflow");
             }
