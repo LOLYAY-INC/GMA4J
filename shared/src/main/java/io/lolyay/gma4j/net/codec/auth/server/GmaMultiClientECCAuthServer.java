@@ -36,6 +36,10 @@ public class GmaMultiClientECCAuthServer implements GmaAuthServer {
         return publicKeys.put(clientId, importPublicKey(publicKey));
     }
 
+    public ECPublicKey addKey(String clientId, ECPublicKey publicKey) {
+        return publicKeys.put(clientId, publicKey);
+    }
+
     public ECPublicKey removeKey(String clientId) {
         return publicKeys.remove(clientId);
     }

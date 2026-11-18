@@ -3,8 +3,7 @@ package io.lolyay.gma4j.codec.fixtures;
 import io.lolyay.gma4j.net.codec.packet.CustomCodec;
 import io.lolyay.gma4j.net.codec.packet.GMAPacket;
 import io.lolyay.gma4j.net.codec.packet.PacketType;
-import io.lolyay.gma4j.net.util.ByteReader;
-import io.lolyay.gma4j.net.util.ByteWriter;
+import io.lolyay.gma4j.net.util.PacketByteBuf;
 
 public record BlobPacket(byte[] blob, long checksum) implements GMAPacket<BlobPacket> {
 
@@ -13,13 +12,13 @@ public record BlobPacket(byte[] blob, long checksum) implements GMAPacket<BlobPa
     public static final PacketType<BlobPacket> TYPE = new PacketType<>(0, new CustomCodec<>(
             BlobPacket.class,
             packet -> {
-                ByteWriter writer = new ByteWriter();
+                PacketByteBuf writer = PacketByteBuf.allocate();
                 writer.writePrefixedBytes(packet.blob());
                 writer.writeLong(packet.checksum());
                 return writer.toByteArray();
             },
             data -> {
-                ByteReader reader = new ByteReader(data);
+                PacketByteBuf reader = PacketByteBuf.wrap(data);
                 return new BlobPacket(
                         reader.readPrefixedBytes(MAX_BLOB),
                         reader.readLong()

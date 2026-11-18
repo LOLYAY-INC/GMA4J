@@ -4,8 +4,7 @@ import io.lolyay.gma4j.net.codec.packet.CustomCodec;
 import io.lolyay.gma4j.net.codec.packet.GMAPacket;
 import io.lolyay.gma4j.net.codec.packet.PacketType;
 import io.lolyay.gma4j.net.delivery.DeliveryDigest;
-import io.lolyay.gma4j.net.util.ByteReader;
-import io.lolyay.gma4j.net.util.ByteWriter;
+import io.lolyay.gma4j.net.util.PacketByteBuf;
 
 import java.util.Objects;
 import java.util.UUID;
@@ -38,7 +37,7 @@ public record DeliveryAckPacket(UUID transferId, byte[] digest)
     }
 
     private static byte[] encode(DeliveryAckPacket packet) {
-        ByteWriter writer = new ByteWriter();
+        PacketByteBuf writer = PacketByteBuf.allocate();
         writer.writeUUID(packet.transferId);
         writer.writeBytes(packet.digest);
         return writer.toByteArray();
@@ -48,7 +47,7 @@ public record DeliveryAckPacket(UUID transferId, byte[] digest)
         if (data.length != 16 + DeliveryDigest.LENGTH) {
             throw new IllegalArgumentException("malformed ACK packet");
         }
-        ByteReader reader = new ByteReader(data);
-        return new DeliveryAckPacket(reader.readUUID(), reader.readBytes(DeliveryDigest.LENGTH));
+        PacketByteBuf reader = PacketByteBuf.wrap(data);
+        return new DeliveryAckPacket(reader.readUUID(), reader.readByteArray(DeliveryDigest.LENGTH));
     }
 }

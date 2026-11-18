@@ -4,8 +4,7 @@ import io.lolyay.gma4j.net.codec.packet.CustomCodec;
 import io.lolyay.gma4j.net.codec.packet.GMAPacket;
 import io.lolyay.gma4j.net.codec.packet.PacketType;
 import io.lolyay.gma4j.net.codec.systemcodec.SystemCodec;
-import io.lolyay.gma4j.net.util.ByteReader;
-import io.lolyay.gma4j.net.util.ByteWriter;
+import io.lolyay.gma4j.net.util.PacketByteBuf;
 
 public record C2SModeRequestPacket(
         boolean lowLatency,
@@ -20,14 +19,14 @@ public record C2SModeRequestPacket(
 
     public static final CustomCodec<C2SModeRequestPacket> CODEC = new CustomCodec<>(C2SModeRequestPacket.class,
             packet -> {
-                ByteWriter writer = new ByteWriter();
+                PacketByteBuf writer = PacketByteBuf.allocate();
                 writer.writeByte((packet.lowLatency() ? 0x1 : 0) | (packet.bigSize() ? 0x2 : 0));
                 writer.writeVarInt(packet.requestedMaxPacketSize());
                 return writer.toByteArray();
             },
             data -> {
-                ByteReader reader = new ByteReader(data);
-                int flags = reader.readByte() & 0xFF;
+                PacketByteBuf reader = PacketByteBuf.wrap(data);
+                int flags = reader.readUnsignedByte();
                 if ((flags & ~0x3) != 0) {
                     throw new IllegalArgumentException("Reserved mode flag bits set: " + flags);
                 }

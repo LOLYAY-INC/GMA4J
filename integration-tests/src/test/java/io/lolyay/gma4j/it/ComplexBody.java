@@ -1,7 +1,6 @@
 package io.lolyay.gma4j.it;
 
-import io.lolyay.gma4j.net.util.ByteReader;
-import io.lolyay.gma4j.net.util.ByteWriter;
+import io.lolyay.gma4j.net.util.PacketByteBuf;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -24,7 +23,7 @@ public record ComplexBody(
     private static final int MAX_STRING = 64 * 1024;
     private static final int MAX_PAYLOAD = 16 * 1024 * 1024;
 
-    static void write(ByteWriter writer, ComplexBody body) {
+    static void write(PacketByteBuf writer, ComplexBody body) {
         writer.writeLong(body.id());
         writer.writePrefixedBytes(body.name().getBytes(StandardCharsets.UTF_8));
         writer.writeUUID(body.sessionId());
@@ -55,7 +54,7 @@ public record ComplexBody(
         writer.writePrefixedBytes(body.payload());
     }
 
-    static ComplexBody read(ByteReader reader) {
+    static ComplexBody read(PacketByteBuf reader) {
         long id = reader.readLong();
         String name = new String(reader.readPrefixedBytes(MAX_STRING), StandardCharsets.UTF_8);
         UUID sessionId = reader.readUUID();

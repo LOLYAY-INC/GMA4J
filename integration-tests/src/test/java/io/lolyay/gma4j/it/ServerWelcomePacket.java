@@ -3,8 +3,7 @@ package io.lolyay.gma4j.it;
 import io.lolyay.gma4j.net.codec.packet.CustomCodec;
 import io.lolyay.gma4j.net.codec.packet.GMAPacket;
 import io.lolyay.gma4j.net.codec.packet.PacketType;
-import io.lolyay.gma4j.net.util.ByteReader;
-import io.lolyay.gma4j.net.util.ByteWriter;
+import io.lolyay.gma4j.net.util.PacketByteBuf;
 
 import java.nio.charset.StandardCharsets;
 
@@ -15,13 +14,13 @@ public record ServerWelcomePacket(String greeting, int connectedClients) impleme
     public static final PacketType<ServerWelcomePacket> TYPE = new PacketType<>(0, new CustomCodec<>(
             ServerWelcomePacket.class,
             packet -> {
-                ByteWriter writer = new ByteWriter();
+                PacketByteBuf writer = PacketByteBuf.allocate();
                 writer.writePrefixedBytes(packet.greeting().getBytes(StandardCharsets.UTF_8));
                 writer.writeInt(packet.connectedClients());
                 return writer.toByteArray();
             },
             data -> {
-                ByteReader reader = new ByteReader(data);
+                PacketByteBuf reader = PacketByteBuf.wrap(data);
                 return new ServerWelcomePacket(
                         new String(reader.readPrefixedBytes(MAX_GREETING), StandardCharsets.UTF_8),
                         reader.readInt()

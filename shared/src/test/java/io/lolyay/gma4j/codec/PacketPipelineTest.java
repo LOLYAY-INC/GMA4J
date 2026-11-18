@@ -12,8 +12,7 @@ import io.lolyay.gma4j.net.codec.encryption.PacketCryptor;
 import io.lolyay.gma4j.net.codec.packet.GMAPacket;
 import io.lolyay.gma4j.net.codec.packetdistributer.IPacketDistributor;
 import io.lolyay.gma4j.net.shared.SharedConfig;
-import io.lolyay.gma4j.net.util.ByteReader;
-import io.lolyay.gma4j.net.util.ByteWriter;
+import io.lolyay.gma4j.net.util.PacketByteBuf;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -102,8 +101,8 @@ class PacketPipelineTest {
         byte[] first = pipeline.encode(new TinyPacket(7));
         byte[] second = pipeline.encode(new TinyPacket(8));
 
-        assertEquals(0, ByteReader.readInt(first, 0));
-        assertEquals(1, ByteReader.readInt(second, 0));
+        assertEquals(0, PacketByteBuf.readInt(first, 0));
+        assertEquals(1, PacketByteBuf.readInt(second, 0));
         assertEquals(0, first[4]);
         assertEquals(TinyPacket.TYPE.codec().getCodecType().ordinal(), first[5] & 0xFF);
         assertEquals(TinyPacket.TYPE.numericId(), ((first[6] & 0xFF) << 8) | (first[7] & 0xFF));
@@ -187,7 +186,7 @@ class PacketPipelineTest {
 
         assertEquals(new TinyPacket(1), receiver.decode(first));
         byte[] wrong = second.clone();
-        ByteWriter.writeInt(wrong, 2, 0);
+        PacketByteBuf.writeInt(wrong, 2, 0);
         assertNull(receiver.decode(wrong));
         assertEquals(new TinyPacket(2), receiver.decode(second));
     }
@@ -464,7 +463,7 @@ class PacketPipelineTest {
 
     private static byte[] header(int sequence, int codec, int packetId) {
         byte[] data = new byte[8];
-        ByteWriter.writeInt(data, sequence, 0);
+        PacketByteBuf.writeInt(data, sequence, 0);
         data[5] = (byte) codec;
         data[6] = (byte) (packetId >> 8);
         data[7] = (byte) packetId;

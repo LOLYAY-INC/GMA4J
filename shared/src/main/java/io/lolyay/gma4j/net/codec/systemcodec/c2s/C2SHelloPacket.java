@@ -8,8 +8,7 @@ import io.lolyay.gma4j.net.codec.packet.CustomCodec;
 import io.lolyay.gma4j.net.codec.packet.GMAPacket;
 import io.lolyay.gma4j.net.codec.packet.PacketType;
 import io.lolyay.gma4j.net.codec.systemcodec.SystemCodec;
-import io.lolyay.gma4j.net.util.ByteReader;
-import io.lolyay.gma4j.net.util.ByteWriter;
+import io.lolyay.gma4j.net.util.PacketByteBuf;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -49,7 +48,7 @@ public record C2SHelloPacket(
     public static final CustomCodec<C2SHelloPacket> CODEC = new CustomCodec<>(C2SHelloPacket.class,
 
             packet -> {
-                ByteWriter writer = new ByteWriter();
+                PacketByteBuf writer = PacketByteBuf.allocate();
 
                 writer.writeShort(packet.gma4jVersion());
 
@@ -73,21 +72,21 @@ public record C2SHelloPacket(
                 return writer.toByteArray();
             },
             data -> {
-                ByteReader reader = new ByteReader(data);
+                PacketByteBuf reader = PacketByteBuf.wrap(data);
                 return new C2SHelloPacket(
                         reader.readShort(),
                         new String(reader.readPrefixedBytes(MAX_CUSTOM_AUTH_DATA_SIZE), StandardCharsets.UTF_8),
-                        ClientType.values()[reader.readByte() & 0xFF],
-                        (short) (reader.readByte() & 0xFF),
-                        reader.readByte() & 0xFF,
-                        reader.readBytes(16),
-                        reader.readShort() & 0xFFFF,
-                        reader.readByte() & 0xFF,
+                        ClientType.values()[reader.readUnsignedByte()],
+                        reader.readUnsignedByte(),
+                        reader.readUnsignedByte(),
+                        reader.readByteArray(16),
+                        reader.readUnsignedShort(),
+                        reader.readUnsignedByte(),
 
                         reader.readPrefixedEnumArray(EncryptionMode.class, EncryptionMode.values().length),
-                        reader.readBytes(32),
-                        reader.readBytes(DHUtil.PUBLIC_KEY_LENGTH),
-                        reader.readBytes(32),
+                        reader.readByteArray(32),
+                        reader.readByteArray(DHUtil.PUBLIC_KEY_LENGTH),
+                        reader.readByteArray(32),
                         reader.readPrefixedEnumArray(GmaAuthType.class, GmaAuthType.values().length),
                         reader.readPrefixedBytes(MAX_CUSTOM_AUTH_DATA_SIZE)
                 );

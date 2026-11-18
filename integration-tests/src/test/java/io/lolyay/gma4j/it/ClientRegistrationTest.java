@@ -119,7 +119,7 @@ class ClientRegistrationTest {
 
         assertEquals(sends, sender.frames.size());
         for (int i = 0; i < sends; i++) {
-            assertEquals(i, io.lolyay.gma4j.net.util.ByteReader.readInt(sender.frames.get(i), 0));
+            assertEquals(i, io.lolyay.gma4j.net.util.PacketByteBuf.readInt(sender.frames.get(i), 0));
         }
     }
 

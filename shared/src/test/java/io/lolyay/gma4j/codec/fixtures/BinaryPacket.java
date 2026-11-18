@@ -3,8 +3,7 @@ package io.lolyay.gma4j.codec.fixtures;
 import io.lolyay.gma4j.net.codec.packet.CustomCodec;
 import io.lolyay.gma4j.net.codec.packet.GMAPacket;
 import io.lolyay.gma4j.net.codec.packet.PacketType;
-import io.lolyay.gma4j.net.util.ByteReader;
-import io.lolyay.gma4j.net.util.ByteWriter;
+import io.lolyay.gma4j.net.util.PacketByteBuf;
 
 import java.nio.charset.StandardCharsets;
 
@@ -15,7 +14,7 @@ public record BinaryPacket(int i, long l, boolean b, String s, int varint) imple
     public static final PacketType<BinaryPacket> TYPE = new PacketType<>(0, new CustomCodec<>(
             BinaryPacket.class,
             packet -> {
-                ByteWriter writer = new ByteWriter();
+                PacketByteBuf writer = PacketByteBuf.allocate();
                 writer.writeInt(packet.i());
                 writer.writeLong(packet.l());
                 writer.writeBoolean(packet.b());
@@ -24,7 +23,7 @@ public record BinaryPacket(int i, long l, boolean b, String s, int varint) imple
                 return writer.toByteArray();
             },
             data -> {
-                ByteReader reader = new ByteReader(data);
+                PacketByteBuf reader = PacketByteBuf.wrap(data);
                 return new BinaryPacket(
                         reader.readInt(),
                         reader.readLong(),

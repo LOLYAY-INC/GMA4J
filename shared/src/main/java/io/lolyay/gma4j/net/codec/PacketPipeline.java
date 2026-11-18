@@ -7,8 +7,7 @@ import io.lolyay.gma4j.net.codec.packet.PacketType;
 import io.lolyay.gma4j.net.codec.packetdistributer.IPacketDistributor;
 import io.lolyay.gma4j.net.shared.CodecType;
 import io.lolyay.gma4j.net.shared.SharedConfig;
-import io.lolyay.gma4j.net.util.ByteReader;
-import io.lolyay.gma4j.net.util.ByteWriter;
+import io.lolyay.gma4j.net.util.PacketByteBuf;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
@@ -185,7 +184,7 @@ public class PacketPipeline {
             throw new PacketCodingException("Packet too short after decryption");
         }
 
-        int receivedSequence = ByteReader.readInt(data, 0);
+        int receivedSequence = PacketByteBuf.readInt(data, 0);
         if (receivedSequence != remoteSequence) {
             log.error("Packet out of order: expected {}, got {}", remoteSequence, receivedSequence);
             if (++outOfSequenceCount >= SharedConfig.MAX_OUT_OF_ORDER) {
@@ -330,7 +329,7 @@ public class PacketPipeline {
         }
 
         byte[] encodedPacket = new byte[payload.length + 8];
-        ByteWriter.writeInt(encodedPacket, currentSequence, 0);
+        PacketByteBuf.writeInt(encodedPacket, currentSequence, 0);
         encodedPacket[4] = (byte) flags;
         encodedPacket[5] = (byte) codecType.ordinal();
         encodedPacket[6] = (byte) (packetId >> 8);

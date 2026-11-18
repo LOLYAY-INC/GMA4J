@@ -4,8 +4,7 @@ import io.lolyay.gma4j.net.codec.packet.CustomCodec;
 import io.lolyay.gma4j.net.codec.packet.GMAPacket;
 import io.lolyay.gma4j.net.codec.packet.PacketType;
 import io.lolyay.gma4j.net.delivery.data.DeliveryLimits;
-import io.lolyay.gma4j.net.util.ByteReader;
-import io.lolyay.gma4j.net.util.ByteWriter;
+import io.lolyay.gma4j.net.util.PacketByteBuf;
 
 import java.util.Objects;
 import java.util.UUID;
@@ -38,7 +37,7 @@ public record DeliveryTransferPacket(UUID transferId, byte[] payload)
     }
 
     private static byte[] encode(DeliveryTransferPacket packet) {
-        ByteWriter writer = new ByteWriter();
+        PacketByteBuf writer = PacketByteBuf.allocate();
         writer.writeUUID(packet.transferId);
         writer.writePrefixedBytes(packet.payload);
         return writer.toByteArray();
@@ -46,7 +45,7 @@ public record DeliveryTransferPacket(UUID transferId, byte[] payload)
 
     private static DeliveryTransferPacket decode(byte[] data) {
         try {
-            ByteReader reader = new ByteReader(data);
+            PacketByteBuf reader = PacketByteBuf.wrap(data);
             UUID transferId = reader.readUUID();
             byte[] payload = reader.readPrefixedBytes(DeliveryLimits.CONSERVATIVE_MAX_PAYLOAD_BYTES);
             if (reader.isReadable()) {

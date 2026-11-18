@@ -1,15 +1,14 @@
 package io.lolyay.gma4j.net.codec.systemcodec.s2c;
 
-import java.util.ArrayList;
 import io.lolyay.gma4j.net.codec.CodecConfig;
 import io.lolyay.gma4j.net.codec.packet.CustomCodec;
 import io.lolyay.gma4j.net.codec.packet.GMAPacket;
 import io.lolyay.gma4j.net.codec.packet.PacketType;
 import io.lolyay.gma4j.net.codec.systemcodec.SystemCodec;
-import io.lolyay.gma4j.net.util.ByteReader;
-import io.lolyay.gma4j.net.util.ByteWriter;
+import io.lolyay.gma4j.net.util.PacketByteBuf;
 
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -50,29 +49,29 @@ public record S2CCodecStateUpdatePacket(
     }
     public static final CustomCodec<S2CCodecStateUpdatePacket> CODEC = new CustomCodec<>(S2CCodecStateUpdatePacket.class,
             packet -> {
-                ByteWriter writer = new ByteWriter();
+                PacketByteBuf writer = PacketByteBuf.allocate();
                 writer.writeVarInt(packet.version());
                 writer.writeBytes(packet.global());
-                writer.writePrefixedArray(packet.states, codecUpdateState -> {
-                    writer.writeBytes(codecUpdateState.packetHash);
-                    writer.writePrefixedBytes(codecUpdateState.packetName.getBytes(StandardCharsets.UTF_8));
-                    writer.writeVarInt(codecUpdateState.packetId);
-                    writer.writeVarInt(codecUpdateState.userSetId);
-                    writer.writePrefixedBytes(codecUpdateState.namespace.getBytes(StandardCharsets.UTF_8));
+                writer.writePrefixedArray(packet.states, (buf, state) -> {
+                    buf.writeBytes(state.packetHash());
+                    buf.writePrefixedBytes(state.packetName().getBytes(StandardCharsets.UTF_8));
+                    buf.writeVarInt(state.packetId());
+                    buf.writeVarInt(state.userSetId());
+                    buf.writePrefixedBytes(state.namespace().getBytes(StandardCharsets.UTF_8));
                 });
                 return writer.toByteArray();
             },
             data -> {
-                ByteReader reader = new ByteReader(data);
+                PacketByteBuf reader = PacketByteBuf.wrap(data);
                 return new S2CCodecStateUpdatePacket(
                         reader.readVarInt(),
-                        reader.readBytes(16),
-                        reader.readPrefixedArray(() -> new CodecUpdateState(
-                                reader.readBytes(16),
-                                new String(reader.readPrefixedBytes(256), StandardCharsets.UTF_8),
-                                reader.readVarInt(),
-                                reader.readVarInt(),
-                                new String(reader.readPrefixedBytes(256), StandardCharsets.UTF_8)
+                        reader.readByteArray(16),
+                        reader.readPrefixedArray(buf -> new CodecUpdateState(
+                                buf.readByteArray(16),
+                                buf.readString(256),
+                                buf.readVarInt(),
+                                buf.readVarInt(),
+                                buf.readString(256)
                         ))
                 );
             }

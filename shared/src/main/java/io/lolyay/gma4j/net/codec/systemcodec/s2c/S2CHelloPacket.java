@@ -7,8 +7,7 @@ import io.lolyay.gma4j.net.codec.packet.CustomCodec;
 import io.lolyay.gma4j.net.codec.packet.GMAPacket;
 import io.lolyay.gma4j.net.codec.packet.PacketType;
 import io.lolyay.gma4j.net.codec.systemcodec.SystemCodec;
-import io.lolyay.gma4j.net.util.ByteReader;
-import io.lolyay.gma4j.net.util.ByteWriter;
+import io.lolyay.gma4j.net.util.PacketByteBuf;
 
 public record S2CHelloPacket(
         // Encryption
@@ -34,7 +33,7 @@ public record S2CHelloPacket(
     public static final CustomCodec<S2CHelloPacket> CODEC = new CustomCodec<>(S2CHelloPacket.class,
 
             packet -> {
-                ByteWriter writer = new ByteWriter();
+                PacketByteBuf writer = PacketByteBuf.allocate();
                 writer.writeByte(packet.selectedEncryptionMode().ordinal());
                 writer.writeBytes(packet.dhParams());
                 writer.writePrefixedBytes(packet.cert());
@@ -44,13 +43,13 @@ public record S2CHelloPacket(
                 return writer.toByteArray();
             },
             data -> {
-                ByteReader reader = new ByteReader(data);
+                PacketByteBuf reader = PacketByteBuf.wrap(data);
                 return new S2CHelloPacket(
-                        EncryptionMode.values()[reader.readByte() & 0xFF],
-                        reader.readBytes(DHUtil.PUBLIC_KEY_LENGTH),
+                        EncryptionMode.values()[reader.readUnsignedByte()],
+                        reader.readByteArray(DHUtil.PUBLIC_KEY_LENGTH),
                         reader.readPrefixedBytes(MAX_CERT_SIZE),
-                        reader.readBytes(NONCE_SIZE),
-                        GmaAuthType.values()[reader.readByte() & 0xFF],
+                        reader.readByteArray(NONCE_SIZE),
+                        GmaAuthType.values()[reader.readUnsignedByte()],
                         reader.readPrefixedBytes(MAX_SIGNATURE_SIZE)
 
                 );

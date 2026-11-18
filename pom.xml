@@ -6,7 +6,7 @@
 
     <groupId>dev.lolyay.gma4j</groupId>
     <artifactId>gma4j-parent</artifactId>
-    <version>3.20.0</version>
+    <version>3.20.1</version>
     <packaging>pom</packaging>
 
     <name>GMA4J Parent</name>
@@ -69,6 +69,11 @@
             </dependency>
 
             <!-- Netty (TCP transport) -->
+            <dependency>
+                <groupId>io.netty</groupId>
+                <artifactId>netty-buffer</artifactId>
+                <version>${netty.version}</version>
+            </dependency>
             <dependency>
                 <groupId>io.netty</groupId>
                 <artifactId>netty-transport</artifactId>

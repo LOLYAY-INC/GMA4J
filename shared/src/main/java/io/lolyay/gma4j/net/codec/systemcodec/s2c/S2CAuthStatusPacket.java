@@ -4,8 +4,7 @@ import io.lolyay.gma4j.net.codec.packet.CustomCodec;
 import io.lolyay.gma4j.net.codec.packet.GMAPacket;
 import io.lolyay.gma4j.net.codec.packet.PacketType;
 import io.lolyay.gma4j.net.codec.systemcodec.SystemCodec;
-import io.lolyay.gma4j.net.util.ByteReader;
-import io.lolyay.gma4j.net.util.ByteWriter;
+import io.lolyay.gma4j.net.util.PacketByteBuf;
 
 public record S2CAuthStatusPacket(
         boolean success
@@ -17,12 +16,12 @@ public record S2CAuthStatusPacket(
     }
     public static final CustomCodec<S2CAuthStatusPacket> CODEC = new CustomCodec<>(S2CAuthStatusPacket.class,
             packet -> {
-                ByteWriter writer = new ByteWriter();
+                PacketByteBuf writer = PacketByteBuf.allocate();
                 writer.writeBoolean(packet.success());
                 return writer.toByteArray();
             },
             data -> {
-                ByteReader reader = new ByteReader(data);
+                PacketByteBuf reader = PacketByteBuf.wrap(data);
                 return new S2CAuthStatusPacket(
                         reader.readBoolean()
                 );
