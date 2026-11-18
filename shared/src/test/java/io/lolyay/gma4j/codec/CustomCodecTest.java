@@ -2,6 +2,7 @@ package io.lolyay.gma4j.codec;
 
 import io.lolyay.gma4j.codec.fixtures.BinaryPacket;
 import io.lolyay.gma4j.codec.fixtures.BlobPacket;
+import io.lolyay.gma4j.net.codec.packet.BinaryCodec;
 import io.lolyay.gma4j.net.shared.CodecType;
 import org.junit.jupiter.api.Test;
 
@@ -54,6 +55,15 @@ class CustomCodecTest {
         byte[] bytes = BinaryPacket.TYPE.codec().serialize(new BinaryPacket(1, 1, true, "x", 1));
         assertThrows(IllegalArgumentException.class,
                 () -> BinaryPacket.TYPE.codec().deserialize(bytes, CodecType.JSON_GSON));
+    }
+
+    @Test
+    void binaryCodecUsesPacketByteBufCallbacks() {
+        BinaryCodec<Integer> codec = new BinaryCodec<>(
+                (buf, value) -> buf.writeVarInt(value),
+                buf -> buf.readVarInt()
+        );
+        assertEquals(-1, codec.deserialize(codec.serialize(-1)));
     }
 
     @Test

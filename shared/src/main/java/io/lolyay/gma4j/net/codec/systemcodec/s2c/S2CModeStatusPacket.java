@@ -4,7 +4,6 @@ import io.lolyay.gma4j.net.codec.packet.CustomCodec;
 import io.lolyay.gma4j.net.codec.packet.GMAPacket;
 import io.lolyay.gma4j.net.codec.packet.PacketType;
 import io.lolyay.gma4j.net.codec.systemcodec.SystemCodec;
-import io.lolyay.gma4j.net.util.PacketByteBuf;
 
 public record S2CModeStatusPacket(
         boolean lowLatency,
@@ -18,14 +17,11 @@ public record S2CModeStatusPacket(
     }
 
     public static final CustomCodec<S2CModeStatusPacket> CODEC = new CustomCodec<>(S2CModeStatusPacket.class,
-            packet -> {
-                PacketByteBuf writer = PacketByteBuf.allocate();
+            (writer, packet) -> {
                 writer.writeByte((packet.lowLatency() ? 0x1 : 0) | (packet.bigSize() ? 0x2 : 0));
                 writer.writeVarInt(packet.maxPacketSize());
-                return writer.toByteArray();
             },
-            data -> {
-                PacketByteBuf reader = PacketByteBuf.wrap(data);
+            reader -> {
                 int flags = reader.readUnsignedByte();
                 if ((flags & ~0x3) != 0) {
                     throw new IllegalArgumentException("Reserved mode flag bits set: " + flags);

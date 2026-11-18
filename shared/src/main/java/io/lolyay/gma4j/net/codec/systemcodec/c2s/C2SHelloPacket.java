@@ -8,7 +8,6 @@ import io.lolyay.gma4j.net.codec.packet.CustomCodec;
 import io.lolyay.gma4j.net.codec.packet.GMAPacket;
 import io.lolyay.gma4j.net.codec.packet.PacketType;
 import io.lolyay.gma4j.net.codec.systemcodec.SystemCodec;
-import io.lolyay.gma4j.net.util.PacketByteBuf;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -47,8 +46,7 @@ public record C2SHelloPacket(
 
     public static final CustomCodec<C2SHelloPacket> CODEC = new CustomCodec<>(C2SHelloPacket.class,
 
-            packet -> {
-                PacketByteBuf writer = PacketByteBuf.allocate();
+            (writer, packet) -> {
 
                 writer.writeShort(packet.gma4jVersion());
 
@@ -69,10 +67,8 @@ public record C2SHelloPacket(
 
                 writer.writePrefixedEnumArray(packet.supportedAuthTypes());
                 writer.writePrefixedBytes(packet.customAuthData());
-                return writer.toByteArray();
             },
-            data -> {
-                PacketByteBuf reader = PacketByteBuf.wrap(data);
+            reader -> {
                 return new C2SHelloPacket(
                         reader.readShort(),
                         new String(reader.readPrefixedBytes(MAX_CUSTOM_AUTH_DATA_SIZE), StandardCharsets.UTF_8),

@@ -5,7 +5,6 @@ import io.lolyay.gma4j.net.codec.packet.CustomCodec;
 import io.lolyay.gma4j.net.codec.packet.GMAPacket;
 import io.lolyay.gma4j.net.codec.packet.PacketType;
 import io.lolyay.gma4j.net.codec.systemcodec.SystemCodec;
-import io.lolyay.gma4j.net.util.PacketByteBuf;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -48,8 +47,7 @@ public record S2CCodecStateUpdatePacket(
         return SystemCodec.S_2_C_CODEC_STATE_UPDATE;
     }
     public static final CustomCodec<S2CCodecStateUpdatePacket> CODEC = new CustomCodec<>(S2CCodecStateUpdatePacket.class,
-            packet -> {
-                PacketByteBuf writer = PacketByteBuf.allocate();
+            (writer, packet) -> {
                 writer.writeVarInt(packet.version());
                 writer.writeBytes(packet.global());
                 writer.writePrefixedArray(packet.states, (buf, state) -> {
@@ -59,10 +57,8 @@ public record S2CCodecStateUpdatePacket(
                     buf.writeVarInt(state.userSetId());
                     buf.writePrefixedBytes(state.namespace().getBytes(StandardCharsets.UTF_8));
                 });
-                return writer.toByteArray();
             },
-            data -> {
-                PacketByteBuf reader = PacketByteBuf.wrap(data);
+            reader -> {
                 return new S2CCodecStateUpdatePacket(
                         reader.readVarInt(),
                         reader.readByteArray(16),

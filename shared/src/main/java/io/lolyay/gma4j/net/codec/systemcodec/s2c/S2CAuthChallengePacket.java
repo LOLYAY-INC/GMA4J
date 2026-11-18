@@ -4,7 +4,6 @@ import io.lolyay.gma4j.net.codec.packet.CustomCodec;
 import io.lolyay.gma4j.net.codec.packet.GMAPacket;
 import io.lolyay.gma4j.net.codec.packet.PacketType;
 import io.lolyay.gma4j.net.codec.systemcodec.SystemCodec;
-import io.lolyay.gma4j.net.util.PacketByteBuf;
 
 import java.util.UUID;
 
@@ -19,14 +18,11 @@ public record S2CAuthChallengePacket(
         return SystemCodec.S_2_C_AUTH_CHALLENGE_PACKET;
     }
     public static final CustomCodec<S2CAuthChallengePacket> CODEC = new CustomCodec<>(S2CAuthChallengePacket.class,
-            packet -> {
-                PacketByteBuf writer = PacketByteBuf.allocate();
+            (writer, packet) -> {
                 writer.writePrefixedBytes(packet.challenge());
                 writer.writeUUID(packet.clientId());
-                return writer.toByteArray();
             },
-            data -> {
-                PacketByteBuf reader = PacketByteBuf.wrap(data);
+            reader -> {
                 return new S2CAuthChallengePacket(
                         reader.readPrefixedBytes(MAX_CHALLENGE_SIZE),
                         reader.readUUID()

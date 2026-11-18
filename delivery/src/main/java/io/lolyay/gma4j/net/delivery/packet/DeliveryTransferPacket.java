@@ -36,16 +36,13 @@ public record DeliveryTransferPacket(UUID transferId, byte[] payload)
         return TYPE;
     }
 
-    private static byte[] encode(DeliveryTransferPacket packet) {
-        PacketByteBuf writer = PacketByteBuf.allocate();
+    private static void encode(PacketByteBuf writer, DeliveryTransferPacket packet) {
         writer.writeUUID(packet.transferId);
         writer.writePrefixedBytes(packet.payload);
-        return writer.toByteArray();
     }
 
-    private static DeliveryTransferPacket decode(byte[] data) {
+    private static DeliveryTransferPacket decode(PacketByteBuf reader) {
         try {
-            PacketByteBuf reader = PacketByteBuf.wrap(data);
             UUID transferId = reader.readUUID();
             byte[] payload = reader.readPrefixedBytes(DeliveryLimits.CONSERVATIVE_MAX_PAYLOAD_BYTES);
             if (reader.isReadable()) {

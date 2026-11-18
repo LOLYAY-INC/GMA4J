@@ -7,7 +7,6 @@ import io.lolyay.gma4j.net.codec.packet.CustomCodec;
 import io.lolyay.gma4j.net.codec.packet.GMAPacket;
 import io.lolyay.gma4j.net.codec.packet.PacketType;
 import io.lolyay.gma4j.net.codec.systemcodec.SystemCodec;
-import io.lolyay.gma4j.net.util.PacketByteBuf;
 
 public record S2CHelloPacket(
         // Encryption
@@ -32,18 +31,15 @@ public record S2CHelloPacket(
     }
     public static final CustomCodec<S2CHelloPacket> CODEC = new CustomCodec<>(S2CHelloPacket.class,
 
-            packet -> {
-                PacketByteBuf writer = PacketByteBuf.allocate();
+            (writer, packet) -> {
                 writer.writeByte(packet.selectedEncryptionMode().ordinal());
                 writer.writeBytes(packet.dhParams());
                 writer.writePrefixedBytes(packet.cert());
                 writer.writeBytes(packet.serverNonce());
                 writer.writeByte(packet.selectedAuthType().ordinal());
                 writer.writePrefixedBytes(packet.signature());
-                return writer.toByteArray();
             },
-            data -> {
-                PacketByteBuf reader = PacketByteBuf.wrap(data);
+            reader -> {
                 return new S2CHelloPacket(
                         EncryptionMode.values()[reader.readUnsignedByte()],
                         reader.readByteArray(DHUtil.PUBLIC_KEY_LENGTH),

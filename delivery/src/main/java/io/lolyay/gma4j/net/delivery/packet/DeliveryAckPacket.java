@@ -36,18 +36,15 @@ public record DeliveryAckPacket(UUID transferId, byte[] digest)
         return TYPE;
     }
 
-    private static byte[] encode(DeliveryAckPacket packet) {
-        PacketByteBuf writer = PacketByteBuf.allocate();
+    private static void encode(PacketByteBuf writer, DeliveryAckPacket packet) {
         writer.writeUUID(packet.transferId);
         writer.writeBytes(packet.digest);
-        return writer.toByteArray();
     }
 
-    private static DeliveryAckPacket decode(byte[] data) {
-        if (data.length != 16 + DeliveryDigest.LENGTH) {
+    private static DeliveryAckPacket decode(PacketByteBuf reader) {
+        if (reader.readableBytes() != 16 + DeliveryDigest.LENGTH) {
             throw new IllegalArgumentException("malformed ACK packet");
         }
-        PacketByteBuf reader = PacketByteBuf.wrap(data);
         return new DeliveryAckPacket(reader.readUUID(), reader.readByteArray(DeliveryDigest.LENGTH));
     }
 }

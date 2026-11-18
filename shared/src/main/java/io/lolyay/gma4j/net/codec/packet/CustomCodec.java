@@ -2,16 +2,19 @@ package io.lolyay.gma4j.net.codec.packet;
 
 import io.lolyay.gma4j.net.shared.CodecHasher;
 import io.lolyay.gma4j.net.shared.CodecType;
+import io.lolyay.gma4j.net.util.PacketByteBuf;
 import lombok.SneakyThrows;
 
+import java.util.function.BiConsumer;
 import java.util.function.Function;
 
 
 public final class CustomCodec<T extends GMAPacket<T>> extends ImplCodec<T> implements ICodec<T> {
-    private final Function<T, byte[]> serializer;
-    private final Function<byte[],T> deserializer;
+    private final BiConsumer<PacketByteBuf, T> serializer;
+    private final Function<PacketByteBuf, T> deserializer;
 
-    public CustomCodec(Class<T> clazz, Function<T, byte[]> serializer, Function<byte[], T> deserializer) {
+    public CustomCodec(Class<T> clazz, BiConsumer<PacketByteBuf, T> serializer,
+                       Function<PacketByteBuf, T> deserializer) {
         super(clazz);
         this.serializer = serializer;
         this.deserializer = deserializer;
@@ -19,7 +22,13 @@ public final class CustomCodec<T extends GMAPacket<T>> extends ImplCodec<T> impl
 
     @Override
     public byte[] serialize(T packet) {
-        return serializer.apply(packet);
+        PacketByteBuf buf = PacketByteBuf.allocate();
+        try {
+            serializer.accept(buf, packet);
+            return buf.toByteArray();
+        } finally {
+            buf.release();
+        }
     }
 
     @Override
@@ -27,7 +36,12 @@ public final class CustomCodec<T extends GMAPacket<T>> extends ImplCodec<T> impl
         if (codecType != CodecType.BINARY_CUSTOM) {
             throw new IllegalArgumentException("Invalid codec type for custom codec: " + codecType);
         }
-        return deserializer.apply(data);
+        PacketByteBuf buf = PacketByteBuf.wrap(data);
+        try {
+            return deserializer.apply(buf);
+        } finally {
+            buf.release();
+        }
     }
 
     @Override

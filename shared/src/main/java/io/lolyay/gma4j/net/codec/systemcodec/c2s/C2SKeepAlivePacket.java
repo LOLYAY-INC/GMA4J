@@ -6,18 +6,14 @@ import io.lolyay.gma4j.net.codec.packet.GMAPacket;
 import io.lolyay.gma4j.net.codec.packet.PacketType;
 import io.lolyay.gma4j.net.codec.systemcodec.SystemCodec;
 import io.lolyay.gma4j.net.shared.SharedConfig;
-import io.lolyay.gma4j.net.util.PacketByteBuf;
 
 public record C2SKeepAlivePacket(long id) implements GMAPacket<C2SKeepAlivePacket> {
 
     public static final CustomCodec<C2SKeepAlivePacket> CODEC = new CustomCodec<>(C2SKeepAlivePacket.class,
-            packet -> {
-                PacketByteBuf writer = PacketByteBuf.allocate();
+            (writer, packet) -> {
                 writer.writeLong(packet.id);
-                return writer.toByteArray();
             },
-            data -> {
-                PacketByteBuf reader = PacketByteBuf.wrap(data);
+            reader -> {
                 return new C2SKeepAlivePacket(
                         reader.readLong()
                 );
