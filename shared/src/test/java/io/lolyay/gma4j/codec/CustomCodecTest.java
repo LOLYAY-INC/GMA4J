@@ -4,6 +4,7 @@ import io.lolyay.gma4j.codec.fixtures.BinaryPacket;
 import io.lolyay.gma4j.codec.fixtures.BlobPacket;
 import io.lolyay.gma4j.net.codec.packet.BinaryCodec;
 import io.lolyay.gma4j.net.shared.CodecType;
+import io.lolyay.gma4j.net.util.PacketByteBuf;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -61,9 +62,15 @@ class CustomCodecTest {
     void binaryCodecUsesPacketByteBufCallbacks() {
         BinaryCodec<Integer> codec = new BinaryCodec<>(
                 (buf, value) -> buf.writeVarInt(value),
-                buf -> buf.readVarInt()
+                PacketByteBuf::readVarInt
         );
-        assertEquals(-1, codec.deserialize(codec.serialize(-1)));
+        PacketByteBuf buf = PacketByteBuf.allocate();
+        try {
+            codec.serialize().accept(buf, -1);
+            assertEquals(-1, codec.deserialize().apply(buf));
+        } finally {
+            buf.release();
+        }
     }
 
     @Test
